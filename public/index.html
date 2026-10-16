@@ -257,7 +257,7 @@ const N = {
   cool: {},
   mem: null,
   reset() {
-    this.mem = { lost: 0, taken: 0, fell: 0, ditch: {}, panics: 0, rescues: 0, perfect: 0, levels: 0, lostTimes: [], saltUsed: 0, dogs: 0, idleCount: 0 };
+    this.mem = { lost: 0, taken: 0, fell: 0, ditch: {}, panics: 0, rescues: 0, perfect: 0, levels: 0, lostTimes: [], saltUsed: 0, dogs: 0, idleCount: 0, calls: 0, relics: {}, gusts: 0, seen: 0 };
     this.cur = null; this.queue = []; this.alpha = 0; this.cool = {}; this.lastKey = {};
   },
   say(text, pri = 1) {
@@ -295,7 +295,7 @@ const N = {
     const c = this.cur;
     if (!c.done) {
       const before = this.shown;
-      this.shown += dt * 38;
+      this.shown += dt * 42;
       if ((this.shown | 0) !== (before | 0) && ((this.shown | 0) % 2 === 0)) sfx.tick();
       if (this.shown >= c.text.length) { this.shown = c.text.length; c.done = true; }
     } else {
@@ -315,11 +315,12 @@ function fill(t, d) {
     .replace(/\{S\}/g, pr.s[0].toUpperCase() + pr.s.slice(1))
     .replace(/\{n\}/g, d.n).replace(/\{k\}/g, d.k).replace(/\{d\}/g, d.d).replace(/\{l\}/g, d.l).replace(/\{level\}/g, d.level);
 }
-const PRI = { taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
-const COOLDOWN = { panic: 9, idle: 20, toofast: 14, split: 25, burn: 18, bossnear: 16, grabbed: 6, salt: 12, nosalt: 30, mute: 2 };
+const PRI = { dawn: 3, relic: 2, oillow: 2, oilout: 3, oil: 1, gust: 2, call: 2, ending: 4, taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
+const COOLDOWN = { call: 10, oil: 20, panic: 9, idle: 20, toofast: 14, split: 25, burn: 18, bossnear: 16, grabbed: 6, salt: 12, nosalt: 30, mute: 2 };
 const LINES = {
   levelstart: (d, m) => {
-    if (d.level === 1) return ['Six of them. They think you know the way.', 'They will follow the light. Not you. The light.'];
+    if (NIGHT_START[d.level]) return NIGHT_START[d.level];
+    if (d.level === 10) return LATER_START[0];
     if (d.boss) return ['Something tall is walking behind you. It is not in a hurry.', 'It has been following since the last house. You just could not see it.'];
     if (m.lost === 0 && d.level > 2) return ['No one lost yet. The night has noticed.', 'Still everyone. The dark is taking that personally.'];
     return ['{n} souls, one lantern. Try to keep the ratio.', 'Night {level}. Longer than the last. They always are.',
@@ -368,7 +369,66 @@ const LINES = {
   mute: () => (muted ? ['Muted. I am still talking.'] : ['Sound. Nothing you hear will help.']),
   pause: () => ['Paused. The dark is not.'],
   title: () => ['Go on. They are waiting.'],
+  dawn: d => DAWN[d.level] || LATER_DAWN,
+  relic: d => RELICS[d.kind].line,
+  oillow: () => ['The oil is low. The light knows before you do.', 'The flame is smaller. So is the world.'],
+  oilout: () => ['Almost dark. Almost.'],
+  oil: () => ['Oil. The light remembers what it was.', 'A flask on the road. Someone left it. Someone did not need it anymore.'],
+  gust: () => ['Wind. Cup the flame. You cannot. Just hold it steady.', 'The wood breathes out. Everything in it leans closer.'],
+  call: (d, m) => {
+    if (m.calls === 1) return ['It is calling them by name. I wonder who told it.'];
+    return ['{name} heard {p} name in the dark. People always go when they hear their name. You would.', 'Someone is saying {name}. It is not me. It is not you.'];
+  },
+  ending: d => ENDINGS[d.kind],
 };
+
+// ---------------------------------------------------------------------------
+// Story — nine houses to the city. The narrator has walked this road before.
+// ---------------------------------------------------------------------------
+const INTRO = [
+  'The village burned on the third night of the fever. Those who could still walk took the road.',
+  'The road runs through the wood, safe house to safe house. Nine of them. Then the city.',
+  'The last bearer did not come back. The lantern did. Someone had to carry it.',
+];
+const NIGHT_START = {
+  1: 'The village is behind you. It is not a village anymore. Nine houses to the city. Walk.',
+  2: 'The keepers of the safe houses are gone. The doors still open. Do not ask who for.',
+  3: 'The last bearer talked to me too. Out loud, at first. Then only in his head.',
+  4: 'Four houses. He made it to four. I would not read too much into that.',
+  5: 'That is him. Behind you. The last bearer. He still carries it. Not a lantern. Something heavier.',
+  6: 'You have passed him. He is still behind you. He will always be behind you now.',
+  7: 'I should say: I am not the lantern. I thought you had worked that out by now.',
+  8: 'One more after this. The city has walls. Walls keep things out. Think about which side you are on.',
+  9: 'The gate. They will count you in. They will not count what follows.',
+};
+const DAWN = {
+  1: 'The door opens. No keeper. A table, and bread no one baked.',
+  2: 'Someone scratched a tally into the door. Six marks. Then four. Then one.',
+  3: 'A lantern on the hook inside. Empty. Not yours. Not yet.',
+  4: 'His coat is still on the chair. Take it. He will not mind. He is not that kind of thing anymore.',
+  5: 'You walked past him. Good. Most stop to talk.',
+  6: 'The house is warm. Something warmed it. Do not look for what.',
+  7: 'The bread is gone from the table tonight. I was hungry. Was I? Someone was.',
+  8: 'The last house before the gate. The keepers left a note. It says: do not bring it in with you.',
+};
+const LATER_START = ['Another road. Another wood. Same me.', 'The city sent you back out. There are always more villages.', 'You know the road now. The road knows you.'];
+const LATER_DAWN = ['A house. A table. You know the rest.', 'The keepers are never here. I have stopped expecting them.', 'Bread, a chair, a hook for the lantern. Enough.'];
+const ENDINGS = {
+  none: 'Every one of them. Every one. The gate closes and I am on the wrong side of it. That has never happened. I will remember your light.',
+  few: '{d} walk through the gate. The guard counts them. He does not count me. He never does. We will meet on another road.',
+  many: '{d} walk through the gate. More of them are with me now than with you. They say your name in the dark. It sounds like mine.',
+};
+const RELICS = {
+  lantern: { line: 'A lantern in the grass. Glass gone. He dropped it running. You can tell by the way it fell.' },
+  shoes: { line: 'A pair of shoes, placed neatly. People do that. They take them off before. I have never understood it.' },
+  cart: { line: 'A cart with no horse. The horse had the right idea.' },
+  cairn: { line: 'Stones piled on stones. A grave, or a count. On this road, both.' },
+  sign: { line: 'A sign. The city, and a number. The number has been scratched out and written again, larger.' },
+  doll: { line: 'A doll, facing the trees. Someone turned it to watch.' },
+  tally: { line: 'Tally marks on a tree. They stop mid-stroke.' },
+  bones: { line: 'Bones. Something that walked on two legs, until it did not.' },
+};
+const RELIC_ORDER = ['lantern', 'sign', 'shoes', 'cart', 'tally', 'cairn', 'doll', 'bones'];
 
 // ---------------------------------------------------------------------------
 // Shop (every upgrade always for sale; each level costs more)
@@ -396,7 +456,9 @@ const G = {
   lv: null, seed: 1, spawnT: 2, maxMon: 2, saltLeft: 0,
   delivered: 0, lostLevel: 0, arriveT: 0, idleT: 0, fastT: 0, slowSaid: false, bossSaid: false,
   shake: 0, hoverRow: -1, lastLiving: 0,
+  oil: 1, oilSaid: 0, gust: { next: 30, phase: 'calm', t: 0 }, callT: 8, beatT: 0, whisperT: 6, dread: 0, introT: 0, endingShown: false,
 };
+function lightFactor() { const g = G.gust; const gf = g.phase === 'blow' ? 0.5 : g.phase === 'warn' ? 0.85 + 0.15 * Math.sin(G.time * 40) : 1; return (0.55 + 0.45 * G.oil) * gf; }
 function R() { return 130 + G.up.lantern * 15; }
 function sight() { return R() * 2.2 + G.up.bell * 55; }
 function fearRate() { return 0.3 * Math.pow(0.85, G.up.courage); }
@@ -447,7 +509,20 @@ function genLevel(n) {
     const off = onRoad ? (hash(seed + 850 + i) - 0.5) * PATH_HW : side * (PATH_HW - 6 + hash(seed + 750 + i) * 36);
     ditches.push({ l: lat(p) + off, p, r, id: i });
   }
-  return { n, len, lat, trees, rocks, ditches, grid, CELL, start: { l: lat(0), p: 0 }, end: { l: lat(len), p: len }, boss: n % 5 === 0 };
+  const relics = [], flasks = [];
+  const nr = n <= 8 ? 2 : 1;
+  for (let i = 0; i < nr; i++) {
+    const idx = ((n - 1) * 2 + i) % RELIC_ORDER.length;
+    const p = lerp(200, len - 200, (i + 0.3 + hash(seed + 1000 + i) * 0.4) / nr);
+    const side = hash(seed + 1100 + i) < 0.5 ? -1 : 1;
+    relics.push({ kind: RELIC_ORDER[idx], l: lat(p) + side * (PATH_HW - 30 + hash(seed + 1200 + i) * 50), p, seen: false });
+  }
+  const nf = 2;
+  for (let i = 0; i < nf; i++) {
+    const p = lerp(300, len - 300, (i + 0.2 + hash(seed + 1300 + i) * 0.6) / nf);
+    flasks.push({ l: lat(p) + (hash(seed + 1400 + i) - 0.5) * PATH_HW * 1.4, p, taken: false });
+  }
+  return { n, len, lat, trees, rocks, ditches, relics, flasks, grid, CELL, start: { l: lat(0), p: 0 }, end: { l: lat(len), p: len }, boss: n % 5 === 0 };
 }
 function nearTrees(l, p) {
   const lv = G.lv, out = [];
@@ -475,14 +550,14 @@ function collideSolid(e, rad) {
 
 // Villagers ------------------------------------------------------------------
 function makeVillager() {
-  return { name: nextName(), pr: pick(PRON), cloak: pick(CLOAKS), skin: pick(SKINS), hat: Math.random() < 0.35,
+  return { lure: null, name: nextName(), pr: pick(PRON), cloak: pick(CLOAKS), skin: pick(SKINS), hat: Math.random() < 0.35,
     l: 0, p: 0, vl: 0, vp: 0, pl: 0, pp: 0, fear: 0, state: 'calm', heading: rand(0, TAU), walk: Math.random() * 10, fade: 1, torch: false, by: null, h: 0 };
 }
 function placeFlock() {
   const lv = G.lv;
   G.villagers.forEach((v, i) => {
     v.l = lv.start.l + rand(-40, 40); v.p = 70 + rand(0, 90) + i * 2;
-    v.state = 'calm'; v.fear = 0; v.vl = v.vp = v.pl = v.pp = 0; v.fade = 1; v.by = null; v.h = 0;
+    v.state = 'calm'; v.fear = 0; v.vl = v.vp = v.pl = v.pp = 0; v.fade = 1; v.by = null; v.h = 0; v.lure = null;
   });
 }
 function updateVillager(v, dt) {
@@ -503,7 +578,14 @@ function updateVillager(v, dt) {
     if (d < sight()) {
       const sp = clamp((d - 12) * 1.6, 0, V_SPEED);
       if (d > 12) { ax += dl / d * sp; ay += dp / d * sp; }
-    } else {
+    }
+    if (v.lure) {
+      v.lure.t -= dt;
+      const m = v.lure.m;
+      if (v.lure.t <= 0 || !m.alive || inAnyCore(v)) v.lure = null;
+      else { const ml = m.l - v.l, mp = m.p - v.p, md = Math.hypot(ml, mp) || 1; ax = ax * 0.25 + ml / md * 62; ay = ay * 0.25 + mp / md * 62; v.fear = Math.min(1.5, v.fear + dt * 0.15); }
+    }
+    if (d >= sight() && !v.lure) {
       v.heading += rand(-1, 1) * dt * 2;
       ax += Math.cos(v.heading) * 18; ay += Math.sin(v.heading) * 18;
     }
@@ -543,6 +625,7 @@ function inTorchLight(v) {
 function inAnyCore(e) {
   const L = G.lantern;
   if (Math.hypot(e.l - L.l, e.p - L.p) < L.core) return true;
+  if (!e.name && G.gust.phase === 'blow') return false;
   const tc = R() * 0.22;
   for (const o of G.villagers) if (o.torch && (o.state === 'calm' || o.state === 'panic') && Math.hypot(o.l - e.l, o.p - e.p) < tc) return true;
   return false;
@@ -617,7 +700,8 @@ function updateMonster(m, dt) {
     let sp = m.spd;
     const dL = Math.hypot(m.l - L.l, m.p - L.p);
     if (dL < L.r) sp *= m.boss ? 0.35 : (G.level >= 3 ? 0.65 : 0.55);
-    if (!chase && !m.boss) {
+    if (G.gust.phase === 'blow' && !m.boss) sp *= 1.6;
+    if (!chase && !m.boss && G.gust.phase !== 'blow') {
       // lurk: circle just outside the core and wait for someone to step out
       const ring = L.core + 26;
       const tl = -dp / d, tp = dl / d, side = (m.sway < Math.PI ? 1 : -1);
@@ -638,7 +722,7 @@ function updateMonster(m, dt) {
   } else m.burn = Math.max(0, m.burn - dt * 2);
 }
 function grab(m, v) {
-  v.state = 'grabbed'; v.by = m; v.dl = rand(-4, 4); v.dp = rand(-4, 4);
+  v.state = 'grabbed'; v.by = m; v.dl = rand(-4, 4); v.dp = rand(-4, 4); v.lure = null;
   m.carry = v; m.carryT = 0;
   sfx.grab(); G.shake = 3;
   N.ev('grabbed', { v });
@@ -706,6 +790,7 @@ function addText(s, l, p, h, col, size = 16, life = 1) { G.texts.push({ s, l, p,
 function startGame() {
   G.level = 0; G.coins = 0;
   G.up = { lantern: 0, bell: 0, courage: 0, torch: 0, dog: 0, salt: 0 };
+  G.endingShown = false; G.dread = 0;
   G.villagers = []; nameBag = [];
   for (let i = 0; i < 6; i++) G.villagers.push(makeVillager());
   N.reset();
@@ -717,6 +802,7 @@ function startLevel() {
   G.villagers = G.villagers.filter(v => v.state === 'safe' || G.level === 1);
   const recruits = G.level === 1 ? 0 : Math.min(G.level <= 5 ? 3 : 2, 28 - G.villagers.length);
   for (let i = 0; i < recruits; i++) G.villagers.push(makeVillager());
+  N.mem.seen = (N.mem.seen || 0) + (G.level === 1 ? G.villagers.length : recruits);
   // torchbearers
   let torches = G.villagers.filter(v => v.torch).length;
   for (const v of G.villagers) { if (torches >= G.up.torch) break; if (!v.torch) { v.torch = true; torches++; } }
@@ -726,10 +812,12 @@ function startLevel() {
   G.saltLeft = G.up.salt;
   G.delivered = 0; G.lostLevel = 0; G.levelT = 0; G.spawnT = 4; G.idleT = 0; G.fastT = 0; G.slowSaid = false; G.bossSaid = false;
   G.maxMon = 1 + Math.floor(G.level * 1.1);
+  G.oil = 1; G.oilSaid = 0; G.gust = { next: rand(22, 34), phase: 'calm', t: 0 }; G.callT = rand(6, 10); G.whisperT = 6;
   G.lastLiving = living().length;
   cam.l = G.lv.start.l; cam.p = 100;
   G.lantern.r = R(); G.lantern.core = R() * 0.62;
   G.state = 'play'; paused = false;
+  if (G.level === 10) N.mem.seen = 0;
   N.ev('levelstart', { level: G.level, n: G.villagers.length, boss: G.lv.boss });
   if (G.lv.boss) spawnMonster(true);
 }
@@ -737,8 +825,15 @@ function completeLevel() {
   G.state = 'arrive'; G.arriveT = 0;
   sfx.arrive();
   N.mem.levels++;
-  if (G.lostLevel === 0) { G.coins += 20; N.mem.perfect++; N.ev('perfect'); }
-  else N.ev('partial', { d: G.delivered, l: G.lostLevel });
+  if (G.level === 9 && !G.endingShown) {
+    const seen = N.mem.seen || 1, lost = N.mem.lost;
+    N.ev('ending', { kind: lost === 0 ? 'none' : lost < seen / 3 ? 'few' : 'many', d: G.delivered });
+  } else {
+    N.ev('dawn', { level: G.level });
+    if (G.lostLevel === 0) { G.coins += 20; N.mem.perfect++; N.ev('perfect'); }
+    else N.ev('partial', { d: G.delivered, l: G.lostLevel });
+  }
+  if (G.lostLevel === 0 && G.level === 9 && !G.endingShown) { G.coins += 20; N.mem.perfect++; }
   if (G.level > G.best) { G.best = G.level; store.set('ln_best', G.best); }
 }
 function gameOver() {
@@ -756,7 +851,9 @@ function buyUpgrade(u) {
   N.ev('buy', { item: u.id, v: v || G.villagers[0] });
 }
 function onClick(x, y) {
-  if (G.state === 'title') { startGame(); return; }
+  if (G.state === 'title') { G.state = 'intro'; G.introT = 0; return; }
+  if (G.state === 'intro') { if (G.introT > 1.2) startGame(); return; }
+  if (G.state === 'ending') { G.endingShown = true; G.state = 'shop'; return; }
   if (G.state === 'over') { G.state = 'title'; N.reset(); N.ev('title'); return; }
   if (G.state === 'arrive') { G.arriveT = 99; return; }
   if (G.state === 'shop') {
@@ -793,8 +890,9 @@ function update(dt) {
   const moved = Math.hypot(g.l - L.l, g.p - L.p);
   L.vx = lerp(L.vx, (g.l - L.l) / dt, 0.2); L.vy = lerp(L.vy, (g.p - L.p) / dt, 0.2);
   L.l = g.l; L.p = g.p;
-  L.r = R() * (1 + 0.025 * Math.sin(G.time * 23) + 0.015 * Math.sin(G.time * 7.3));
-  L.core = R() * 0.62;
+  const lf = G.state === 'play' ? lightFactor() : 1;
+  L.r = R() * lf * (1 + 0.025 * Math.sin(G.time * 23) + 0.015 * Math.sin(G.time * 7.3));
+  L.core = R() * lf * 0.62;
   G.shake = Math.max(0, G.shake - dt * 20);
   // particles / texts
   for (const q of G.parts) { q.life -= dt; q.l += q.vl * dt; q.p += q.vp * dt; q.h += q.vh * dt; q.vh -= q.grav * dt; if (q.h < 0) { q.h = 0; q.vh = 0; } }
@@ -804,7 +902,8 @@ function update(dt) {
   for (const s of G.salts) s.t -= dt;
   G.salts = G.salts.filter(s => s.t > 0);
 
-  if (G.state === 'title') {
+  if (G.state === 'title' || G.state === 'intro') {
+    if (G.state === 'intro') G.introT += dt;
     for (const v of G.villagers) updateVillager(v, dt);
     followCam(dt);
     return;
@@ -812,12 +911,41 @@ function update(dt) {
   if (G.state === 'arrive') {
     G.arriveT += dt;
     for (const v of G.villagers) if (v.state === 'safe' || v.state === 'lost') v.fade -= dt;
-    if (G.arriveT > 2.6) G.state = 'shop';
+    if (G.arriveT > 2.6) G.state = (G.level === 9 && !G.endingShown) ? 'ending' : 'shop';
     return;
   }
   if (G.state !== 'play') return;
 
   G.levelT += dt;
+  // oil burns down; flasks on the road refill it
+  G.oil = Math.max(0, G.oil - dt / 85);
+  if (G.oil < 0.4 && G.oilSaid < 1) { G.oilSaid = 1; N.ev('oillow'); }
+  if (G.oil < 0.12 && G.oilSaid < 2) { G.oilSaid = 2; N.ev('oilout'); }
+  for (const f of G.lv.flasks) {
+    if (!f.taken && Math.hypot(f.l - L.l, f.p - L.p) < 24) { f.taken = true; G.oil = Math.min(1, G.oil + 0.55); sfx.chime(); N.ev('oil'); addText('oil', f.l, f.p, 20, '#ffd27a', 14, 1); for (let i = 0; i < 8; i++) ember(f.l, f.p, 6); }
+  }
+  // gusts
+  const gu = G.gust;
+  gu.t += dt;
+  if (gu.phase === 'calm' && gu.t > gu.next) { gu.phase = 'warn'; gu.t = 0; noise(1.4, 0.12, 300, 0.5, 'bandpass'); }
+  else if (gu.phase === 'warn' && gu.t > 1.3) { gu.phase = 'blow'; gu.t = 0; noise(1.8, 0.35, 500, 0.4, 'bandpass'); N.mem.gusts++; if (N.mem.gusts === 1) N.ev('gust'); G.shake = 3; }
+  else if (gu.phase === 'blow' && gu.t > 1.8) { gu.phase = 'calm'; gu.t = 0; gu.next = rand(Math.max(12, 30 - G.level * 1.5), Math.max(20, 46 - G.level * 2)); }
+  // the dark calls them by name
+  G.callT -= dt;
+  if (G.callT <= 0) {
+    G.callT = rand(Math.max(5, 11 - G.level * 0.5), Math.max(8, 16 - G.level * 0.5));
+    const lurkers = G.monsters.filter(m => m.alive && !m.carry && !m.boss);
+    if (lurkers.length) {
+      const m = pick(lurkers);
+      const cands = G.villagers.filter(v => v.state === 'calm' && !v.lure && !inAnyCore(v) && dist(m, v) < 260);
+      if (cands.length) { const v = pick(cands); v.lure = { m, t: 3.2 }; m.calling = { name: v.name, t: 3.2 }; N.mem.calls++; N.ev('call', { v }); noise(0.7, 0.07, 1800, 4, 'bandpass'); noise(0.5, 0.05, 900, 3, 'bandpass', 0.25); }
+    }
+  }
+  for (const m of G.monsters) if (m.calling) { m.calling.t -= dt; if (m.calling.t <= 0) m.calling = null; }
+  // relics: the narrator notices what the light touches
+  for (const r of G.lv.relics) {
+    if (!r.seen && Math.hypot(r.l - L.l, r.p - L.p) < L.r * 0.95) { r.seen = true; if (!N.mem.relics[r.kind]) { N.mem.relics[r.kind] = 1; N.ev('relic', { kind: r.kind }); } }
+  }
   for (const v of G.villagers) updateVillager(v, dt);
   G.villagers = G.villagers.filter(v => v.state !== 'lost' || v.fade > -0.2);
   for (const d of G.dogs) updateDog(d, dt);
@@ -849,11 +977,17 @@ function update(dt) {
     const away = live.filter(v => Math.hypot(v.l - c.l, v.p - c.p) > 150).length;
     if (away >= 2 && away >= live.length * 0.25) N.ev('split');
   }
-  // drone
+  // dread: how close the nearest thing is to the nearest person
+  let near = 1e9;
+  for (const m of G.monsters) for (const v of live) near = Math.min(near, dist(m, v));
+  const target = clamp(1 - (near - 30) / 220, 0, 1);
+  G.dread += (target - G.dread) * Math.min(1, dt * 3);
   if (actx) {
-    let near = 1e9;
-    for (const m of G.monsters) for (const v of live) near = Math.min(near, dist(m, v));
-    setDrone(near > 400 ? 0.08 : near > 180 ? 0.25 : 0.7);
+    setDrone(0.08 + G.dread * 0.7);
+    G.beatT -= dt;
+    if (G.dread > 0.4 && G.beatT <= 0) { tone(46, 0.16, 'sine', 0.28 + G.dread * 0.2, 0.5); tone(42, 0.12, 'sine', 0.2, 0.5, 0.17); G.beatT = 1.25 - G.dread * 0.6; }
+    G.whisperT -= dt;
+    if (G.whisperT <= 0) { G.whisperT = rand(7, 14); if (G.monsters.length) { noise(0.9, 0.05, rand(1200, 2600), 5, 'bandpass'); noise(0.6, 0.04, rand(600, 1200), 4, 'bandpass', 0.4); } }
   }
   // end of level
   if (!live.length) { if (G.delivered > 0) completeLevel(); else gameOver(); }
@@ -930,6 +1064,25 @@ function drawTree(t) {
   }
 }
 function drawRock(r) { isoBox(r.l, r.p, r.a, r.b, r.h, '#2e3340'); }
+function drawRelic(r) {
+  const k = r.kind;
+  if (k === 'lantern') { isoBox(r.l, r.p, 3, 3, 7, '#2a241c'); isoBox(r.l, r.p, 2, 2, 4, '#1a1612', 1.5); }
+  else if (k === 'shoes') { isoBox(r.l - 4, r.p, 2, 3.5, 2.5, '#3a2a1a'); isoBox(r.l + 4, r.p, 2, 3.5, 2.5, '#3a2a1a'); }
+  else if (k === 'cart') { isoBox(r.l, r.p, 14, 8, 8, '#4a3a2a', 6); isoBox(r.l - 8, r.p + 8, 1.5, 5, 10, '#2a2018'); isoBox(r.l + 8, r.p - 8, 1.5, 5, 10, '#2a2018'); }
+  else if (k === 'cairn') { isoBox(r.l, r.p, 7, 7, 5, '#3a3f4e'); isoBox(r.l, r.p, 5, 5, 4, '#444a5a', 5); isoBox(r.l, r.p, 3, 3, 4, '#3a3f4e', 9); }
+  else if (k === 'sign') { isoBox(r.l, r.p, 1.5, 1.5, 24, '#3a2e22'); const s = toScreen(r.l, r.p, 24); poly([[s.x - 12, s.y - 2], [s.x + 10, s.y - 8], [s.x + 10, s.y + 2], [s.x - 12, s.y + 8]], '#5a4a36'); }
+  else if (k === 'doll') { isoBox(r.l, r.p, 2, 2, 4, '#7a4a5a'); isoBox(r.l, r.p, 1.6, 1.6, 2.5, '#d9b08c', 4); }
+  else if (k === 'tally') { isoBox(r.l, r.p, 3, 3, 30, '#2a2420'); const s = toScreen(r.l, r.p, 14); ctx.strokeStyle = '#8a7a66'; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 5; i++) { ctx.moveTo(s.x - 4 + i * 2, s.y - 5); ctx.lineTo(s.x - 4 + i * 2, s.y + (i === 4 ? 0 : 5)); } ctx.stroke(); }
+  else if (k === 'bones') { const s = toScreen(r.l, r.p); ctx.strokeStyle = '#cfc6b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 9, s.y - 2); ctx.lineTo(s.x + 6, s.y + 3); ctx.moveTo(s.x - 2, s.y + 5); ctx.lineTo(s.x + 9, s.y - 3); ctx.stroke(); ctx.fillStyle = '#cfc6b0'; ctx.beginPath(); ctx.arc(s.x - 10, s.y - 6, 3.5, 0, TAU); ctx.fill(); }
+}
+function drawFlask(f) {
+  if (f.taken) return;
+  const bob = Math.sin(G.time * 4 + f.l) * 1.5;
+  isoBox(f.l, f.p, 2.5, 2.5, 6, '#c9a05a', 2 + bob);
+  isoBox(f.l, f.p, 1.5, 1.5, 3, '#8a6a2a', 8 + bob);
+  const s = toScreen(f.l, f.p, 5 + bob);
+  ctx.fillStyle = `rgba(255,220,120,${0.5 + 0.5 * Math.sin(G.time * 6 + f.p)})`; ctx.fillRect(s.x - 1, s.y - 1, 2, 2);
+}
 function drawHouse(h, lit) {
   const a = 42, b = 34;
   isoBox(h.l, h.p, a, b, 44, '#5a4e44');
@@ -987,7 +1140,7 @@ function drawMonster(m) {
     for (let i = -2; i <= 2; i++) poly([[s.x + i * 7 - 3, s.y + 2], [s.x + i * 7 + 3, s.y + 2], [s.x + i * 7, s.y - 14 - Math.abs(i) * -3]], '#0a0812');
   }
   const e = toScreen(m.l + sway, m.p, m.boss ? 72 : 26);
-  G.eyes.push({ x: e.x, y: e.y, boss: m.boss, a: m.fadeIn, burn: t });
+  G.eyes.push({ x: e.x, y: e.y, boss: m.boss, a: m.fadeIn, burn: t, calling: m.calling });
 }
 const mixCache = new Map();
 function mixHexCached(a, b, t) { const k = a + b + ((t * 20) | 0); let c = mixCache.get(k); if (!c) { c = mixHex(a, b, ((t * 20) | 0) / 20); mixCache.set(k, c); } return c; }
@@ -1033,6 +1186,7 @@ function drawDarkness() {
   for (const v of G.villagers) if (v.torch && (v.state === 'calm' || v.state === 'panic')) { const s = toScreen(v.l, v.p); hole(s.x, s.y, R() * 0.45, 0.64, 0.85); }
   for (const h of [G.lv.end, G.lv.start]) if (h.doorS) { hole(h.doorS.x, h.doorS.y, 50, 0.8, 0.5); hole(h.winS.x, h.winS.y, 30, 0.8, 0.5); }
   for (const q of G.parts) if (q.col !== '#3a3426' && q.col !== '#1a1326') { const s = toScreen(q.l, q.p, q.h); hole(s.x, s.y, 14, 1, 0.5); }
+  for (const f of G.lv.flasks) if (!f.taken) { const s = toScreen(f.l, f.p, 6); hole(s.x, s.y, 22, 0.7, 0.45); }
   ctx.drawImage(dark, 0, 0);
   // warm tint
   ctx.save(); ctx.translate(ls.x, ls.y); ctx.scale(1, 0.64);
@@ -1052,6 +1206,11 @@ function drawEyes() {
     const r = e.boss ? 3.5 : 1.6, sp = e.boss ? 9 : 3.5;
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.arc(e.x - sp, e.y, r, 0, TAU); ctx.arc(e.x + sp, e.y, r, 0, TAU); ctx.fill();
+    if (e.calling) {
+      const k = clamp(e.calling.t / 3.2, 0, 1);
+      ctx.globalAlpha = e.a * (0.35 + 0.35 * Math.sin(G.time * 9)) * Math.min(1, k * 3);
+      text('…' + e.calling.name.toLowerCase() + '…', e.x + rand(-0.5, 0.5), e.y - 16 - (1 - k) * 14, 13, '#8fa3c8', 'center', 400, 'Georgia, serif');
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -1104,6 +1263,8 @@ function drawWorld() {
   const vis = (l, p) => { const s = toScreen(l, p); return s.x > -80 && s.x < W + 80 && s.y > -120 && s.y < H + 60; };
   for (const t of G.lv.trees) if (vis(t.l, t.p)) items.push({ p: t.p, f: () => drawTree(t) });
   for (const r of G.lv.rocks) if (vis(r.l, r.p)) items.push({ p: r.p, f: () => drawRock(r) });
+  for (const r of G.lv.relics) if (vis(r.l, r.p)) items.push({ p: r.p, f: () => drawRelic(r) });
+  for (const f of G.lv.flasks) if (vis(f.l, f.p)) items.push({ p: f.p, f: () => drawFlask(f) });
   items.push({ p: G.lv.end.p + 20, f: () => drawHouse(G.lv.end, true) });
   items.push({ p: G.lv.start.p - 60, f: () => drawHouse(G.lv.start, false) });
   for (const v of G.villagers) items.push({ p: v.p, f: () => drawVillager(v) });
@@ -1118,8 +1279,9 @@ function drawWorld() {
   drawParticles();
   drawFog();
   // vignette
-  const vg = ctx.createRadialGradient(W / 2, FOCUS_Y, 200, W / 2, FOCUS_Y, 620);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+  const dr = G.state === 'play' ? G.dread : 0;
+  const vg = ctx.createRadialGradient(W / 2, FOCUS_Y, 200 - dr * 90, W / 2, FOCUS_Y, 620 - dr * 160);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(${(8 * dr) | 0},0,0,${0.45 + dr * 0.4})`);
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 }
 function drawHUD() {
@@ -1135,6 +1297,11 @@ function drawHUD() {
     ctx.fillStyle = col; ctx.fillRect(x, y, 6, 10); x += 9;
   }
   text(`${live} following${panicN ? ` · ${panicN} running` : ''} · ${G.delivered} safe`, 18, 82, 13, 'rgba(207,198,176,0.7)', 'left', 600);
+  // oil
+  const ox = W - 118, oy = 78, ow = 100;
+  text('oil', ox - 8, oy + 2, 11, 'rgba(207,198,176,0.6)', 'right', 600);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(ox, oy, ow, 4);
+  ctx.fillStyle = G.oil < 0.25 ? `rgba(255,120,60,${0.6 + 0.4 * Math.sin(G.time * 8)})` : '#ffb45a'; ctx.fillRect(ox, oy, ow * G.oil, 4);
   // coins
   ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(W - 20, 30, 7, 0, TAU); ctx.fill();
   ctx.fillStyle = '#a07a2a'; ctx.beginPath(); ctx.arc(W - 20, 30, 4, 0, TAU); ctx.fill();
@@ -1174,7 +1341,7 @@ function drawOverlay() {
     ctx.fillStyle = 'rgba(4,5,12,0.35)'; ctx.fillRect(0, 0, W, H - PANEL_H);
     text('LANTERN', W / 2, 200, 74, '#e8dcc0', 'center', 900, 'Georgia, serif');
     text('Your cursor is the only light.', W / 2, 262, 20, '#cfc6b0', 'center', 400, 'Georgia, serif');
-    wrapText('Lead them to the safe house. Keep them in the light. Whatever is in the dark wants the ones you leave behind.',
+    wrapText('Nine safe houses to the city. Keep them in the light. Whatever is in the dark wants the ones you leave behind.',
       W / 2, 318, 400, 16, 'rgba(207,198,176,0.75)', 22, 'Georgia, serif', 'center', 400);
     const bl = 0.6 + 0.4 * Math.sin(G.time * 3);
     text('click to begin', W / 2, 560, 18, `rgba(255,210,120,${bl})`, 'center', 700);
@@ -1182,16 +1349,38 @@ function drawOverlay() {
     if (G.best) text(`best: night ${G.best}`, W / 2, 640, 14, 'rgba(207,198,176,0.6)', 'center', 600);
     return;
   }
+  if (G.state === 'intro') {
+    ctx.fillStyle = 'rgba(4,5,12,0.82)'; ctx.fillRect(0, 0, W, H - PANEL_H);
+    let y = 230;
+    INTRO.forEach((line, i) => {
+      const a = clamp((G.introT - i * 1.1) / 0.8, 0, 1);
+      if (a <= 0) return;
+      ctx.globalAlpha = a;
+      y += wrapText(line, W / 2, y, 420, 19, '#d8cfb6', 27, 'Georgia, serif', 'center', 400) * 27 + 26;
+      ctx.globalAlpha = 1;
+    });
+    if (G.introT > 3.8) text('click to walk', W / 2, 600, 18, `rgba(255,210,120,${0.6 + 0.4 * Math.sin(G.time * 3)})`, 'center', 700);
+    return;
+  }
+  if (G.state === 'ending') {
+    ctx.fillStyle = 'rgba(4,5,12,0.85)'; ctx.fillRect(0, 0, W, H - PANEL_H);
+    text('The city', W / 2, 230, 46, '#e8dcc0', 'center', 900, 'Georgia, serif');
+    text(`${G.delivered} through the gate · ${N.mem.lost} left on the road`, W / 2, 290, 17, '#cfc6b0', 'center', 500);
+    text(`${N.mem.taken} taken · ${N.mem.fell} fell · ${N.mem.rescues} pulled back`, W / 2, 318, 14, 'rgba(207,198,176,0.7)', 'center', 500);
+    wrapText('The gate closes behind them. In the morning the guard hands you the lantern and points at the road. There are other villages.', W / 2, 400, 400, 16, 'rgba(216,207,182,0.8)', 23, 'Georgia, serif', 'center', 400);
+    text('click to keep walking', W / 2, 560, 18, `rgba(255,210,120,${0.6 + 0.4 * Math.sin(G.time * 3)})`, 'center', 700);
+    return;
+  }
   if (G.state === 'arrive') {
     panel(340, 150, 0.85);
     text('Safe house', W / 2, 380, 30, '#e8dcc0', 'center', 900, 'Georgia, serif');
-    text(`${G.delivered} arrived · ${G.lostLevel} lost${G.lostLevel === 0 ? ' · +20 bonus' : ''}`, W / 2, 425, 18, '#cfc6b0', 'center', 600);
+    text(`${G.delivered} arrived · ${G.lostLevel} lost${G.lostLevel === 0 ? ' · +20 bonus' : ''}${G.level < 9 ? ` · ${9 - G.level} house${9 - G.level === 1 ? '' : 's'} to the city` : ''}`, W / 2, 425, 18, '#cfc6b0', 'center', 600);
     text(`${G.delivered * 10 + (G.lostLevel === 0 ? 20 : 0)} coins`, W / 2, 455, 16, '#ffd27a', 'center', 700);
     return;
   }
   if (G.state === 'shop') {
     ctx.fillStyle = 'rgba(4,5,12,0.9)'; ctx.fillRect(0, 0, W, H - PANEL_H);
-    text(`Night ${G.level} survived`, W / 2, 70, 30, '#e8dcc0', 'center', 900, 'Georgia, serif');
+    text(G.level < 9 ? `Night ${G.level} · ${9 - G.level} house${9 - G.level === 1 ? '' : 's'} to the city` : `Night ${G.level}`, W / 2, 70, 28, '#e8dcc0', 'center', 900, 'Georgia, serif');
     text(`${G.villagers.filter(v => v.state === 'safe').length} villagers · ${G.level < 5 ? 3 : 2} more will join at dawn`, W / 2, 108, 15, 'rgba(207,198,176,0.75)', 'center', 500);
     ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(W / 2 - 30, 145, 7, 0, TAU); ctx.fill();
     text(`${G.coins}`, W / 2 - 16, 145, 22, '#ffd27a', 'left', 900);
@@ -1247,7 +1436,7 @@ function render() {
   drawWorld();
   ctx.restore();
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
-  if (G.state !== 'title' && G.state !== 'shop') drawHUD();
+  if (G.state !== 'title' && G.state !== 'shop' && G.state !== 'intro' && G.state !== 'ending') drawHUD();
   drawOverlay();
   drawNarrator();
   ctx.restore();

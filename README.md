@@ -3,8 +3,9 @@
 An HTML5 canvas game, deployed on Cloudflare Pages and embedded (iframe) into another website.
 
 Survival horror, isometric low-poly. Your cursor is the only light. A crowd of frightened villagers
-follows it, and the dark follows them. Lead everyone from one safe house to the next. Each night is
-longer and worse than the last. The game narrates your mistakes, by name.
+follows it, and the dark follows them. The village burned; the road to the city runs through the wood,
+nine safe houses long. The last lantern-bearer did not come back. The game narrates your mistakes, by
+name, and it has walked this road before.
 
 - `public/index.html` — the entire game (no build step, no dependencies, no asset files)
 - `wrangler.jsonc` — Cloudflare Pages config (`assets.directory: ./public`)
@@ -15,6 +16,10 @@ longer and worse than the last. The game narrates your mistakes, by name.
 - Anyone left in the dark too long panics and runs. Panicked people walk into ditches.
 - The light draws the dark too. Things that reach the bright core of the lantern burn.
   Things that reach a villager outside the core drag them away. Swing the light over them to break the grab.
+- The oil burns down over the night. Pass the light over flasks on the road to refill it.
+- Gusts gutter the flame for a moment. The dark rushes when it does.
+- Things in the dark call villagers by name. The one called will drift toward the voice unless the light holds them.
+- Nine houses to the city. Reach the gate and the road goes on.
 - Click to drop a salt line (if you bought salt). `M` mutes, `P` pauses.
 - Between nights, the village pays per head delivered. Spend it on a brighter lantern, a bell,
   courage, torchbearers, dogs and salt.
