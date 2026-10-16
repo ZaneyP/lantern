@@ -436,8 +436,8 @@ const LINES = {
     if (k === 2) return ['Same ditch. {name} this time.', 'That ditch again. {name} did not see it. Neither did you, apparently.'];
     return ['That ditch has taken {k} now. It is practically family.', '{k} in one hole. At some point it stops being the hole.'];
   },
-  grabbed: () => ['The dark has {name}. You have about two seconds.', 'Something has {name} by the cloak. The light hurts it. Hint.'],
-  rescue: () => ['{name} gets to keep being {name}. Barely.', 'Close. {name} will not be thanking you.', 'You got {o} back. Try not to make a habit of needing to.'],
+  grabbed: () => null,
+  rescue: () => ['{name} gets to keep being {name}. Barely.', 'That close. {name} will not be thanking you.', 'You got {o} back. That does not usually happen.'],
   panic: (d, m) => {
     if (m.panics < 2) return ['{name} has stopped listening. You left {o} out there too long.', 'Someone is running. It is {name}. It will not help.'];
     return ['{name} is running. It is always someone.', 'That is {name} going the wrong way. The lantern is this way. Everyone knows.',
@@ -834,10 +834,10 @@ function updateMonster(m, dt) {
     if (m.carry) release(m, false);
   } else if (m.carry) {
     const dl = m.l - L.l, dp = m.p - L.p, d = Math.hypot(dl, dp) || 1;
-    m.l += dl / d * 58 * dt; m.p += dp / d * 58 * dt;
+    m.l += dl / d * 150 * dt; m.p += dp / d * 150 * dt;
     m.carryT += dt;
     m.tgt = m.carry; m.reach = 1;
-    if (m.carryT > 2.6) { const v = m.carry; m.carry = null; loseVillager(v, 'taken'); if (!m.boss) m.alive = false; }
+    if (m.carryT > 0.45) { const v = m.carry; m.carry = null; loseVillager(v, 'taken'); if (!m.boss) m.alive = false; }
   } else {
     let tx = L.l, ty = L.p, chase = null, best = m.boss ? 1e9 : 210;
     for (const v of G.villagers) {

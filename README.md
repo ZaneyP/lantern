@@ -15,7 +15,7 @@ name, and it has walked this road before.
 - Move the mouse. Villagers walk toward the light and huddle in it.
 - Anyone left in the dark too long panics and runs. Panicked people walk into ditches.
 - The light draws the dark too. Things that reach the bright core of the lantern burn.
-  Things that reach a villager outside the core drag them away. Swing the light over them to break the grab.
+  Anything that reaches a villager outside the core takes them. There is no getting them back.
 - The oil burns down over the night. Pass the light over flasks on the road to refill it.
 - Gusts gutter the flame for a moment. The dark rushes when it does.
 - Things in the dark call villagers by name. The one called will drift toward the voice unless the light holds them.
