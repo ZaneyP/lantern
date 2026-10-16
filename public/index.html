@@ -821,10 +821,12 @@ function spawnMonster(boss = false) {
 function updateMonster(m, dt) {
   const L = G.lantern;
   m.fadeIn = Math.min(1, m.fadeIn + dt);
+  const pl = m.l, pp = m.p;
   if (m.carry) {
     const dl = m.l - L.l, dp = m.p - L.p, d = Math.hypot(dl, dp) || 1;
     m.l += dl / d * 58 * dt; m.p += dp / d * 58 * dt;
     m.carryT += dt;
+    m.tgt = m.carry; m.reach = 1;
     if (m.carryT > 2.6) { const v = m.carry; m.carry = null; loseVillager(v, 'taken'); if (!m.boss) m.alive = false; }
   } else {
     let tx = L.l, ty = L.p, chase = null, best = m.boss ? 1e9 : 210;
@@ -836,6 +838,9 @@ function updateMonster(m, dt) {
     }
     if (chase) { tx = chase.l; ty = chase.p; }
     let dl = tx - m.l, dp = ty - m.p, d = Math.hypot(dl, dp) || 1;
+    m.tgt = { l: tx, p: ty };
+    const want = chase ? clamp(1.2 - d / 150, 0.25, 1) : (G.gust.phase === 'blow' ? 0.8 : 0);
+    m.reach = (m.reach || 0) + (want - (m.reach || 0)) * Math.min(1, dt * 2.5);
     let sp = m.spd;
     const dL = Math.hypot(m.l - L.l, m.p - L.p);
     if (dL < L.r) sp *= m.boss ? 0.35 : (G.level >= 3 ? 0.65 : 0.55);
@@ -855,6 +860,10 @@ function updateMonster(m, dt) {
     const dl = m.l - s.l, dp = m.p - s.p, d = Math.hypot(dl, dp) || 0.01;
     if (d < s.r + 6) { m.l = s.l + dl / d * (s.r + 6); m.p = s.p + dp / d * (s.r + 6); }
   }
+  // facing (screen-space) and the smear it leaves while it slides
+  const ml = m.l - pl, mp = m.p - pp;
+  if (Math.hypot(ml, mp) > 0.05) { const a = Math.atan2(mp * 0.5, ml); m.dir = m.dir == null ? a : m.dir + (((a - m.dir + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 4); }
+  if (Math.random() < dt * 5 && Math.hypot(ml, mp) > 0.1) G.parts.push({ l: m.l + rand(-3, 3), p: m.p + rand(-2, 2), h: 0, vl: 0, vp: 0, vh: 0, life: rand(0.8, 1.6), max: 1.6, col: '#0a0a14', size: m.boss ? 7 : 3.5, grav: 0 });
   if (inAnyCore(m)) {
     if (m.boss) { if (m.carry) { release(m, true); } }
     else { m.burn += dt; if (Math.random() < dt * 30) ember(m.l, m.p, rand(8, 30)); if (m.burn > 0.42) killMonster(m); }
@@ -1353,18 +1362,59 @@ function drawVillager(v) {
   ctx.restore();
 }
 function drawMonster(m) {
-  const sway = Math.sin(G.time * 2.1 + m.sway) * 1.5;
   const t = m.burn / 0.42;
-  const col = t > 0 ? mixHexCached(m.boss ? '#0a0812' : '#08070f', '#ff7a2a', Math.min(1, t)) : (m.boss ? '#0a0812' : '#08070f');
-  const a = m.boss ? 10 : 5, h = m.h * (0.9 + 0.1 * Math.sin(G.time * 3 + m.sway));
-  isoBox(m.l + sway, m.p, a, a, h, col, 0, 0.9 * m.fadeIn);
-  if (m.boss) {
-    // crown of spikes
-    const s = toScreen(m.l + sway, m.p, h);
-    for (let i = -2; i <= 2; i++) poly([[s.x + i * 7 - 3, s.y + 2], [s.x + i * 7 + 3, s.y + 2], [s.x + i * 7, s.y - 14 - Math.abs(i) * -3]], '#0a0812');
+  const base = m.boss ? '#0a0812' : '#07060e';
+  const col = t > 0 ? mixHexCached(base, '#ff7a2a', Math.min(1, t)) : base;
+  const sc = m.boss ? 2.6 : 1.2;
+  const s = toScreen(m.l, m.p);
+  const hover = Math.sin(G.time * 0.9 + m.sway) * 1.5 * sc;
+  const sway = Math.sin(G.time * 1.1 + m.sway) * 2.2 * sc;
+  const dir = m.dir == null ? Math.PI / 2 : m.dir;
+  const reach = m.reach || 0;
+  ctx.save();
+  ctx.globalAlpha = 0.93 * m.fadeIn;
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // legs: long, thin, trailing behind the slide; feet never lift
+  const hipY = s.y - 20 * sc - hover, hipX = s.x + sway * 0.3;
+  ctx.lineWidth = 1.5 * sc;
+  for (const side of [-1, 1]) {
+    const drag = 9 * sc + Math.sin(G.time * 0.7 + m.sway + side) * 2 * sc;
+    const fx = s.x + side * 4.5 * sc - Math.cos(dir) * drag, fy = s.y + 1 - Math.sin(dir) * drag * 0.5;
+    const kx = (hipX + fx) / 2 + side * 2.5 * sc, ky = (hipY + fy) / 2 + 3 * sc;
+    ctx.beginPath(); ctx.moveTo(hipX + side * 2.5 * sc, hipY); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+    ctx.globalAlpha = 0.4 * m.fadeIn;
+    ctx.beginPath(); ctx.ellipse(fx + Math.cos(dir) * -3 * sc, fy + 1, 7 * sc, 2.2 * sc, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 0.93 * m.fadeIn;
   }
-  const e = toScreen(m.l + sway, m.p, m.boss ? 72 : 26);
-  G.eyes.push({ x: e.x, y: e.y, boss: m.boss, a: m.fadeIn, burn: t, calling: m.calling });
+  // body: narrow at the shoulders, a little wider at the hips
+  const shY = s.y - 44 * sc - hover, shX = hipX + sway * 0.5;
+  poly([[hipX - 5.5 * sc, hipY + 2], [hipX + 5.5 * sc, hipY + 2], [shX + 3.5 * sc, shY], [shX - 3.5 * sc, shY]], col);
+  // head: small, tilted toward the target
+  const hx = shX + sway * 0.6, hy = shY - 5.5 * sc;
+  ctx.beginPath(); ctx.ellipse(hx, hy, 4 * sc, 5.5 * sc, Math.sin(G.time * 0.6 + m.sway) * 0.25, 0, TAU); ctx.fill();
+  // arms: slender, long; hang and sway, or reach for the target
+  let ax = 0, ay = 1;
+  if (m.tgt) { const ts = toScreen(m.tgt.l, m.tgt.p, 10); const dx = ts.x - shX, dy = ts.y - shY, dd = Math.hypot(dx, dy) || 1; ax = dx / dd; ay = dy / dd; }
+  ctx.lineWidth = 1.4 * sc;
+  for (const side of [-1, 1]) {
+    const sx0 = shX + side * 3.5 * sc, sy0 = shY + 2 * sc;
+    const hangX = sx0 + side * 5 * sc + Math.sin(G.time * 1.4 + m.sway + side * 2) * 3 * sc, hangY = sy0 + 38 * sc;
+    const len = (30 + 26 * reach) * sc;
+    const spread = side * 0.28 * (1 - reach * 0.6);
+    const ca = Math.cos(spread), sa = Math.sin(spread);
+    const rx = ax * ca - ay * sa, ry = ax * sa + ay * ca;
+    const reachX = sx0 + rx * len, reachY = sy0 + ry * len;
+    const ex = lerp(hangX, reachX, reach), ey = lerp(hangY, reachY, reach);
+    const elx = (sx0 + ex) / 2 + side * 7 * sc * (1 - reach * 0.5), ely = (sy0 + ey) / 2 + 6 * sc * (1 - reach);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(elx, ely); ctx.lineTo(ex, ey); ctx.stroke();
+    // fingers
+    const fa = Math.atan2(ey - ely, ex - elx);
+    ctx.lineWidth = 0.9 * sc;
+    for (let i = -1; i <= 1; i++) { const a = fa + i * 0.45 + Math.sin(G.time * 5 + i + m.sway) * 0.15; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + Math.cos(a) * 6 * sc, ey + Math.sin(a) * 6 * sc); ctx.stroke(); }
+    ctx.lineWidth = 1.4 * sc;
+  }
+  ctx.restore();
+  G.eyes.push({ x: hx, y: hy, boss: m.boss, a: m.fadeIn, burn: t, calling: m.calling });
 }
 const mixCache = new Map();
 function mixHexCached(a, b, t) { const k = a + b + ((t * 20) | 0); let c = mixCache.get(k); if (!c) { c = mixHex(a, b, ((t * 20) | 0) / 20); mixCache.set(k, c); } return c; }
@@ -1409,7 +1459,7 @@ function drawDarkness() {
   hole(ls.x, ls.y, L.r * 1.18, 0.64, 1);
   for (const v of G.villagers) if (v.torch && (v.state === 'calm' || v.state === 'panic')) { const s = toScreen(v.l, v.p); hole(s.x, s.y, R() * 0.45, 0.64, 0.85); }
   for (const h of [G.lv.end, G.lv.start]) if (h.doorS) { hole(h.doorS.x, h.doorS.y, 50, 0.8, 0.5); hole(h.winS.x, h.winS.y, 30, 0.8, 0.5); }
-  for (const q of G.parts) if (q.col !== '#3a3426' && q.col !== '#1a1326') { const s = toScreen(q.l, q.p, q.h); hole(s.x, s.y, 14, 1, 0.5); }
+  for (const q of G.parts) if (q.col !== '#3a3426' && q.col !== '#1a1326' && q.col !== '#0a0a14') { const s = toScreen(q.l, q.p, q.h); hole(s.x, s.y, 14, 1, 0.5); }
   for (const f of G.lv.flasks) if (!f.taken) { const s = toScreen(f.l, f.p, 6); hole(s.x, s.y, 22, 0.7, 0.45); }
   for (const h of G.lv.holds) if (h.kind === 'gate' && !h.done) { const s = toScreen(h.l, h.p, 11); hole(s.x, s.y, 16, 1, 0.5); }
   ctx.drawImage(dark, 0, 0);
@@ -1428,7 +1478,7 @@ function drawEyes() {
     const pulse = 0.7 + 0.3 * Math.sin(G.time * 5 + e.x);
     ctx.globalAlpha = e.a * pulse;
     const col = e.boss ? '#ff3a3a' : (e.burn > 0 ? '#ffb070' : '#dff2ff');
-    const r = e.boss ? 3.5 : 1.6, sp = e.boss ? 9 : 3.5;
+    const r = e.boss ? 3.2 : 1.4, sp = e.boss ? 6 : 2.4;
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.arc(e.x - sp, e.y, r, 0, TAU); ctx.arc(e.x + sp, e.y, r, 0, TAU); ctx.fill();
     if (e.calling) {
