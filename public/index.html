@@ -414,7 +414,7 @@ function fill(t, d) {
     .replace(/\{S\}/g, pr.s[0].toUpperCase() + pr.s.slice(1))
     .replace(/\{n\}/g, d.n).replace(/\{k\}/g, d.k).replace(/\{d\}/g, d.d).replace(/\{l\}/g, d.l).replace(/\{level\}/g, d.level);
 }
-const PRI = { hold_tree: 3, hold_bridge: 3, hold_gate: 3, done_tree: 2, done_bridge: 2, done_gate: 2, siege: 1, dawn: 3, relic: 2, oillow: 2, oilout: 3, oil: 1, gust: 2, call: 2, ending: 4, taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
+const PRI = { gustfrenzy: 2, hold_tree: 3, hold_bridge: 3, hold_gate: 3, done_tree: 2, done_bridge: 2, done_gate: 2, siege: 1, dawn: 3, relic: 2, oillow: 2, oilout: 3, oil: 1, gust: 2, call: 2, ending: 4, taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
 const COOLDOWN = { siege: 28, call: 10, oil: 20, panic: 9, idle: 20, toofast: 14, split: 25, burn: 18, bossnear: 16, grabbed: 6, salt: 12, nosalt: 30, mute: 2 };
 const LINES = {
   levelstart: (d, m) => {
@@ -474,6 +474,7 @@ const LINES = {
   oilout: () => ['Almost dark. Almost.'],
   oil: () => ['Oil. The light remembers what it was.', 'A flask on the road. Someone left it. Someone did not need it anymore.'],
   gust: () => ['Wind. Cup the flame. You cannot. Just hold it steady.', 'The wood breathes out. Everything in it leans closer.'],
+  gustfrenzy: () => ['The flame drops. Look at their eyes. They know what a small light means.', 'Wind. See them? They cannot stand still when the light gets small. Neither should you.'],
   call: (d, m) => {
     if (m.calls === 1) return ['It is calling them by name. I wonder who told it.'];
     return ['{name} heard {p} name in the dark. People always go when they hear their name. You would.', 'Someone is saying {name}. It is not me. It is not you.'];
@@ -815,14 +816,23 @@ function spawnMonster(boss = false) {
     l = clamp(l, lat - PATH_HW - 160, lat + PATH_HW + 160);
     if (Math.hypot(l - L.l, p - L.p) < 240) p = L.p + (p > L.p ? 300 : -300);
   }
-  G.monsters.push({ l, p, spd: boss ? 44 : Math.min(96, 40 + G.level * 3.5) * rand(0.9, 1.1), burn: 0, carry: null, carryT: 0, boss, sway: rand(0, TAU), alive: true, h: boss ? 92 : 34, fadeIn: 0 });
+  G.monsters.push({ frenzy: 0, fzT: 0, fzA: 0, l, p, spd: boss ? 44 : Math.min(96, 40 + G.level * 3.5) * rand(0.9, 1.1), burn: 0, carry: null, carryT: 0, boss, sway: rand(0, TAU), alive: true, h: boss ? 92 : 34, fadeIn: 0 });
   if (boss) sfx.boss();
 }
 function updateMonster(m, dt) {
   const L = G.lantern;
   m.fadeIn = Math.min(1, m.fadeIn + dt);
   const pl = m.l, pp = m.p;
-  if (m.carry) {
+  if (m.frenzy > 0) {
+    // the flame dropped: eyes red, limbs everywhere, darting at nothing for a second
+    m.frenzy -= dt; m.fzT -= dt;
+    if (m.fzT <= 0) { m.fzT = rand(0.08, 0.16); m.fzA = rand(0, TAU); }
+    const sp = m.spd * 2.4;
+    m.l += Math.cos(m.fzA) * sp * dt; m.p += Math.sin(m.fzA) * sp * dt;
+    m.tgt = { l: m.l + Math.cos(m.fzA) * 40, p: m.p + Math.sin(m.fzA) * 40 };
+    m.reach = 0.5 + 0.5 * Math.sin(G.time * 31 + m.sway);
+    if (m.carry) release(m, false);
+  } else if (m.carry) {
     const dl = m.l - L.l, dp = m.p - L.p, d = Math.hypot(dl, dp) || 1;
     m.l += dl / d * 58 * dt; m.p += dp / d * 58 * dt;
     m.carryT += dt;
@@ -1115,8 +1125,14 @@ function update(dt) {
   const gu = G.gust;
   gu.t += dt;
   if (gu.phase === 'calm' && gu.t > gu.next) { gu.phase = 'warn'; gu.t = 0; noise(1.4, 0.12, 300, 0.5, 'bandpass'); }
-  else if (gu.phase === 'warn' && gu.t > 1.3) { gu.phase = 'blow'; gu.t = 0; noise(1.8, 0.35, 500, 0.4, 'bandpass'); N.mem.gusts++; if (N.mem.gusts === 1) N.ev('gust'); G.shake = 3; }
-  else if (gu.phase === 'blow' && gu.t > 1.8) { gu.phase = 'calm'; gu.t = 0; gu.next = rand(Math.max(12, 30 - G.level * 1.5), Math.max(20, 46 - G.level * 2)); }
+  else if (gu.phase === 'warn' && gu.t > 1.3) {
+    gu.phase = 'blow'; gu.t = 0; noise(2.4, 0.35, 500, 0.4, 'bandpass'); N.mem.gusts++; G.shake = 3;
+    let any = false;
+    for (const m of G.monsters) if (m.alive && !m.boss) { m.frenzy = 1.0; m.fzT = 0; any = true; }
+    if (any) { tone(1600, 0.5, 'sawtooth', 0.06, 0.3); tone(2200, 0.4, 'square', 0.03, 0.25, 0.08); }
+    if (N.mem.gusts === 1) N.ev(any ? 'gustfrenzy' : 'gust');
+  }
+  else if (gu.phase === 'blow' && gu.t > 2.6) { gu.phase = 'calm'; gu.t = 0; gu.next = rand(Math.max(12, 30 - G.level * 1.5), Math.max(20, 46 - G.level * 2)); }
   // the dark calls them by name
   G.callT -= dt;
   if (G.callT <= 0) {
@@ -1414,7 +1430,7 @@ function drawMonster(m) {
     ctx.lineWidth = 1.4 * sc;
   }
   ctx.restore();
-  G.eyes.push({ x: hx, y: hy, boss: m.boss, a: m.fadeIn, burn: t, calling: m.calling });
+  G.eyes.push({ x: hx, y: hy, boss: m.boss, a: m.fadeIn, burn: t, calling: m.calling, frenzy: m.frenzy > 0 });
 }
 const mixCache = new Map();
 function mixHexCached(a, b, t) { const k = a + b + ((t * 20) | 0); let c = mixCache.get(k); if (!c) { c = mixHex(a, b, ((t * 20) | 0) / 20); mixCache.set(k, c); } return c; }
@@ -1477,8 +1493,9 @@ function drawEyes() {
   for (const e of G.eyes) {
     const pulse = 0.7 + 0.3 * Math.sin(G.time * 5 + e.x);
     ctx.globalAlpha = e.a * pulse;
-    const col = e.boss ? '#ff3a3a' : (e.burn > 0 ? '#ffb070' : '#dff2ff');
-    const r = e.boss ? 3.2 : 1.4, sp = e.boss ? 6 : 2.4;
+    const col = e.boss || e.frenzy ? '#ff2a2a' : (e.burn > 0 ? '#ffb070' : '#dff2ff');
+    const r = (e.boss ? 3.2 : 1.4) * (e.frenzy ? 1.5 : 1), sp = e.boss ? 6 : 2.4;
+    if (e.frenzy) { e.x += rand(-1.5, 1.5); e.y += rand(-1.5, 1.5); ctx.globalAlpha = e.a; }
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.arc(e.x - sp, e.y, r, 0, TAU); ctx.arc(e.x + sp, e.y, r, 0, TAU); ctx.fill();
     if (e.calling) {
