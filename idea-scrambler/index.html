@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idea Scrambler</title>
+<style>
+  :root{
+    --bg:#efe7d6; --ink:#1c1b18; --muted:#6b6760; --panel:#fffdf7; --line:#ddd3bf;
+    --cab:#8d1f1f; --cab-dark:#5e1212; --cab-edge:#b53a2b; --gold:#e8b94a; --gold-dark:#a8801e;
+    --reel:#fbf6e8; --reel-ink:#1a1612; --reel-shade:rgba(0,0,0,.55);
+    --hold:#2fb46a; --hold-off:#3a2a2a; --bulb:#ffe08a; --bulb-off:#6a4a1c;
+    --cell:150px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14110f; --ink:#f1ede4; --muted:#9a948a; --panel:#1f1b18; --line:#332b25;
+    }
+  }
+  :root[data-theme="dark"]{ --bg:#14110f; --ink:#f1ede4; --muted:#9a948a; --panel:#1f1b18; --line:#332b25; }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif}
+  main{max-width:1000px;margin:0 auto;padding:28px 16px 64px}
+  header{text-align:center;margin-bottom:18px}
+  h1{margin:0;font-size:clamp(26px,5vw,42px);letter-spacing:-.02em}
+  header p{margin:4px 0 0;color:var(--muted)}
+
+  .machine{position:relative;padding-right:74px}
+  .cabinet{background:linear-gradient(180deg,var(--cab-edge),var(--cab) 18%,var(--cab-dark));border-radius:28px;padding:18px 22px 22px;box-shadow:0 18px 40px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.18);border:4px solid var(--gold-dark)}
+  .marquee{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:0 6px 14px}
+  .bulb{width:14px;height:14px;border-radius:50%;background:var(--bulb-off);box-shadow:inset 0 -2px 3px rgba(0,0,0,.4);flex:none}
+  .machine.spinning .bulb{animation:blink .5s steps(1) infinite}
+  .machine.spinning .bulb:nth-child(2n){animation-delay:.25s}
+  .machine.win .bulb{animation:blink .18s steps(1) 6}
+  @keyframes blink{0%,49%{background:var(--bulb);box-shadow:0 0 10px var(--bulb)}50%,100%{background:var(--bulb-off);box-shadow:inset 0 -2px 3px rgba(0,0,0,.4)}}
+  .title-plate{white-space:nowrap;color:var(--gold);font-weight:900;letter-spacing:.3em;text-transform:uppercase;font-size:13px;text-shadow:0 1px 0 rgba(0,0,0,.5)}
+
+  .reels{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;background:var(--cab-dark);border-radius:16px;padding:14px;box-shadow:inset 0 4px 14px rgba(0,0,0,.6)}
+  .reel{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .reel.off .window{filter:grayscale(1) brightness(.55)}
+  .reel-label{min-height:2.9em;display:flex;align-items:flex-end;justify-content:center;color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;text-align:center}
+  .window{position:relative;height:var(--cell);background:var(--reel);border-radius:10px;overflow:hidden;border:3px solid var(--gold-dark);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4)}
+  .window::before,.window::after{content:"";position:absolute;left:0;right:0;height:34%;pointer-events:none;z-index:2}
+  .window::before{top:0;background:linear-gradient(180deg,var(--reel-shade),transparent)}
+  .window::after{bottom:0;background:linear-gradient(0deg,var(--reel-shade),transparent)}
+  .window .payline{position:absolute;left:-3px;right:-3px;top:50%;height:2px;background:rgba(200,40,40,.55);z-index:3;pointer-events:none}
+  .reel.held .window{box-shadow:inset 0 0 0 2px rgba(255,255,255,.4),0 0 0 3px var(--hold)}
+  .strip{will-change:transform}
+  .cell{height:var(--cell);display:flex;align-items:center;justify-content:center;text-align:center;padding:0 10px;color:var(--reel-ink);font-weight:750;font-size:17px;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere}
+  .cell.filler{color:#5a5248}
+  .cell small{display:block;font-weight:500;color:#8a8070;font-size:13px}
+
+  .hold{font:inherit;cursor:pointer;border-radius:8px;border:2px solid rgba(0,0,0,.4);background:var(--hold-off);color:#d8c8c8;padding:7px 6px;font-weight:800;letter-spacing:.14em;font-size:12px;text-transform:uppercase;box-shadow:0 3px 0 rgba(0,0,0,.5)}
+  .hold:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.5)}
+  .hold.on{background:var(--hold);color:#06240f;box-shadow:0 3px 0 rgba(0,0,0,.5),0 0 14px var(--hold)}
+  .hold:disabled{opacity:.4;cursor:default}
+  .mini{font:inherit;cursor:pointer;border:none;background:transparent;color:var(--gold);font-size:12px;text-decoration:underline;padding:0}
+
+  .deck{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+  .btn{font:inherit;cursor:pointer;border-radius:999px;border:2px solid var(--gold-dark);background:linear-gradient(180deg,#fff3c4,var(--gold));color:#3b2a06;padding:10px 20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:13px;box-shadow:0 4px 0 var(--gold-dark)}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--gold-dark)}
+  .btn.big{font-size:17px;padding:14px 34px}
+  .btn:disabled{opacity:.6;cursor:default}
+  .hint{color:rgba(255,255,255,.7);font-size:13px;width:100%;text-align:center}
+
+  .lever{position:absolute;right:0;top:40px;width:70px;height:260px}
+  .lever .track{position:absolute;left:28px;top:10px;width:14px;height:220px;background:linear-gradient(90deg,#444,#999,#444);border-radius:7px;box-shadow:inset 0 0 4px rgba(0,0,0,.6)}
+  .lever .arm{position:absolute;left:31px;top:40px;width:8px;height:120px;background:linear-gradient(90deg,#777,#ddd,#777);border-radius:4px;transform-origin:bottom center;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+  .lever .knob{position:absolute;left:12px;top:10px;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff8a7a,#b31c1c 60%,#5e0a0a);box-shadow:0 4px 10px rgba(0,0,0,.5);transition:transform .35s cubic-bezier(.3,1.4,.5,1);cursor:grab}
+  .lever.pulled .arm{transform:scaleY(.15)}
+  .lever.pulled .knob{transform:translateY(100px)}
+  .lever button{position:absolute;inset:0;background:transparent;border:none;cursor:pointer}
+
+  .ticket{margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:4px 4px 14px 14px;padding:16px 18px;position:relative}
+  .ticket::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px;background:repeating-linear-gradient(90deg,transparent 0 6px,var(--panel) 6px 12px)}
+  .ticket .label{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:6px}
+  .ticket p{margin:0;font-size:18px}
+  .ticket .row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .plain{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);padding:8px 12px}
+  .plain:hover{border-color:var(--muted)}
+
+  .history{margin-top:30px}
+  .history h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 10px}
+  .history ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .history li{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:15px}
+  .history li .txt{flex:1}
+  .history li.star{border-color:var(--gold-dark)}
+  .history button{padding:4px 8px;font-size:13px}
+  .empty{color:var(--muted);font-size:14px}
+
+  @media (max-width:720px){
+    .machine{padding-right:0}
+    .lever{display:none}
+    .reels{grid-template-columns:repeat(2,1fr)}
+    .cabinet{padding:14px}
+    .bulb:nth-child(n+6):nth-child(-n+14){display:none} .title-plate{letter-spacing:.18em;font-size:12px}
+  }
+  @media (prefers-reduced-motion: reduce){ .strip{transition:none !important} .bulb{animation:none !important} }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Idea Scrambler</h1>
+    <p>Pull the lever. Hold what works. Spin the rest.</p>
+  </header>
+
+  <div class="machine" id="machine">
+    <div class="cabinet">
+      <div class="marquee" id="marquee"></div>
+      <div class="reels" id="reels"></div>
+      <div class="deck">
+        <button class="btn big" id="spin">Spin</button>
+        <button class="btn" id="sound" title="Toggle sound">Sound: on</button>
+        <span class="hint">Space = spin · 1–4 = hold · S = save</span>
+      </div>
+    </div>
+    <div class="lever" id="lever">
+      <div class="track"></div><div class="arm"></div><div class="knob"></div>
+      <button aria-label="Pull lever"></button>
+    </div>
+  </div>
+
+  <div class="ticket">
+    <div class="label">Your idea</div>
+    <p id="pitch">Pull the lever.</p>
+    <div class="row">
+      <button class="plain" id="copy">Copy</button>
+      <button class="plain" id="save">Save to list</button>
+    </div>
+  </div>
+
+  <section class="history">
+    <h2>Saved ideas</h2>
+    <ul id="history"></ul>
+    <div class="empty" id="empty">Nothing saved yet. Save keepers so they survive spins.</div>
+  </section>
+</main>
+
+<script>
+const DATA = {
+  genre: {
+    label: "Genre", stripe: "var(--g1)", items: [
+      "Match-3","Endless runner","Tower defense","Roguelike","Auto-battler","Rhythm game","Platformer","Twin-stick shooter",
+      "Bullet hell","Physics sandbox","Puzzle platformer","Idle / clicker","Deck-builder","Survival horror","Fishing game","Racing",
+      "Golf","Tetris-like falling blocks","Breakout / brick breaker","Snake","Pinball","Stealth","Dating sim","Visual novel",
+      "City builder","Farming sim","Cooking sim","Restaurant management","Metroidvania","Beat 'em up","Fighting game","Sports (one weird sport)",
+      "Party game","Trivia / quiz","Word game","Hidden object","Point-and-click adventure","Escape room","Dungeon crawler","Boss rush",
+      "Tycoon","Delivery / courier","Vampire Survivors-like horde","Brawler with ragdolls","Shoot the moon arcade","Rail shooter",
+      "Sokoban","Pipe-connecting puzzle","Minesweeper-like","Solitaire variant","Mahjong solitaire","Flappy-style one-button",
+      "Catapult / Angry Birds launcher","Base defense with escort","Space trader","Submarine sim","Lawn mowing / cleaning sim",
+      "Typing game","Rhythm-shooter hybrid","Turn-based tactics","Hex strategy","Chess variant","Checkers variant","Marble run",
+      "Bubble shooter","Crane / claw game","Fruit Ninja slicer","Lemmings-style herd guide","Tamagotchi pet","Train routing","Air traffic control"
+    ]},
+  style: {
+    label: "Visual style", stripe: "var(--g2)", items: [
+      "Chunky 1-bit pixel art","PICO-8 palette pixel art","Flat vector shapes","Paper cutout / collage","Crayon drawings","Claymation",
+      "Felt and yarn","Chalkboard","Blueprint linework","Neon synthwave","VHS tape glitch","Game Boy green","Hand-drawn sketchbook",
+      "Woodblock print","Risograph two-tone","Isometric low-poly","Papercraft origami","Stained glass","Pixel art, Super Nintendo era",
+      "Cross-stitch embroidery","Children's book watercolor","Cave paintings","Watch-face / instrument panel UI","Comic halftone dots",
+      "Shadow puppets","Chiptune tracker UI","ASCII / text-mode","Lego-style bricks","Sticker bomb","Playing-card suits","Mosaic tiles",
+      "Hazy anime background painting","Heavy-outline Saturday-morning cartoon","Old Mac black-and-white","Teletext / Ceefax blocks",
+      "Thermal receipt printer","Stop-motion desk objects","Toy diorama photography","Microscope slide","Ukiyo-e woodcut","Doodles on graph paper",
+      "Glow-in-the-dark","Candy and gum shapes","Everything is fruit","Everything is office supplies","Silhouettes against sunset",
+      "Monochrome with one accent color","Spray paint stencil","Vaporwave statues and grids","Tarot card illustration","Medieval manuscript marginalia"
+    ]},
+  mechanic: {
+    label: "Core mechanic / loop", stripe: "var(--g3)", items: [
+      "Drag a ragdoll by one limb","Everything you touch sticks to you and grows","One button, hold to charge, release to act",
+      "Time only moves when you move","Rewind the last 5 seconds at a cost","Swap places with any enemy","Combine two items to make a third",
+      "Draw the path, then watch it play out","Gravity flips every 10 seconds","You control two characters with one input",
+      "Shrink and grow to fit through spaces","Build a chain reaction, then trigger it once","Every action costs health",
+      "Earn gold, spend it in a shop between waves","Protect a dumb escort that keeps walking","Plant now, harvest next level",
+      "Steal the enemy's abilities on kill","Place tiles to extend the level ahead of you","Bounce between walls, never touch the floor",
+      "Momentum carries over between rooms","Light reveals the map, but attracts enemies","Negotiate instead of fight",
+      "Your weapon is the environment","The level is drawn by the previous run","Every object has a weight that matters",
+      "Sound is your only sensor","Match colors to pass through barriers","Stack things as high as you can without toppling",
+      "Catch and throw, never hold","Pick 1 of 3 upgrades after every level","Lose a limb or part per hit, adapt",
+      "Possess objects and ride them","Dig down, light runs out","Fling with a slingshot aim-and-release","Cut the rope at the right moment",
+      "Herd a crowd with a cursor","Draw a line that becomes a solid wall","Rotate the whole world instead of the player",
+      "Deal damage by typing words","Hit the beat to attack harder","Loop a 10-second ghost of yourself","Hunger clock forces constant forward motion",
+      "Grapple hook everything","Cards in hand are your moves this turn","Trade safety for speed on every jump","Mirror player on the other half of the screen",
+      "Everything you kill becomes a platform","Hold your breath to go underwater","Combo meter decays unless you keep hitting","Boss gets a new part each phase, you take it when it falls off"
+    ]},
+  twist: {
+    label: "Twist (optional)", stripe: "var(--g4)", optional: true, items: [
+      "Portrait phone screen","Playable in under 60 seconds","No text anywhere","Only one color plus black","Must be funny",
+      "Score shared on a leaderboard","Two players, one keyboard","Controls get worse as you win","Entire game on a single screen",
+      "Sound effects made by mouth","Every run under 2 minutes","Enemies are adorable and you feel bad","No jump button",
+      "Everything is edible","Set entirely inside a vending machine","Set on a rolling log","Protagonist is a piece of furniture",
+      "Game narrates your mistakes","Real-time clock changes the level","Starts at the end and runs backward","Must work with mouse only",
+      "Loading screen is the game","Procedural everything, no asset files","Pause menu is a weapon","Camera is always slightly too close",
+      "Credits roll while you play","Health bar is a physical object in the world","Weather is the boss","Mascot is a vegetable",
+      "Everything is bigger than the player","You are the final boss","Players draw their own character first"
+    ]}
+};
+
+const ORDER = ["genre","style","mechanic","twist"];
+const state = { value:{}, held:{}, enabled:{} };
+ORDER.forEach(k => { state.value[k] = null; state.held[k] = false; state.enabled[k] = !DATA[k].optional; });
+
+const reelsEl = document.getElementById("reels");
+const machine = document.getElementById("machine");
+const pitchEl = document.getElementById("pitch");
+const histEl = document.getElementById("history");
+const emptyEl = document.getElementById("empty");
+const CELL = 150;
+
+// marquee bulbs
+const marquee = document.getElementById("marquee");
+for(let i=0;i<9;i++) marquee.insertAdjacentHTML("beforeend",'<span class="bulb"></span>');
+marquee.insertAdjacentHTML("beforeend",'<span class="title-plate">Jam-O-Matic</span>');
+for(let i=0;i<9;i++) marquee.insertAdjacentHTML("beforeend",'<span class="bulb"></span>');
+
+function rnd(key){ const it = DATA[key].items; return it[Math.floor(Math.random()*it.length)]; }
+function pick(key){ let v; do { v = rnd(key); } while (DATA[key].items.length>1 && v===state.value[key]); return v; }
+function esc(s){ return s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function cell(text, filler){ return `<div class="cell${filler?" filler":""}">${esc(text)}</div>`; }
+
+const reelEls = {};
+function buildReels(){
+  reelsEl.innerHTML = "";
+  ORDER.forEach((key,i) => {
+    const d = DATA[key];
+    const el = document.createElement("div");
+    el.className = "reel"; el.dataset.key = key;
+    el.innerHTML = `
+      <div class="reel-label">${i+1}. ${d.label.replace(" (optional)","")}</div>
+      <div class="window"><div class="strip"></div><div class="payline"></div></div>
+      <button class="hold" data-act="hold">Hold</button>
+      ${d.optional ? `<button class="mini" data-act="toggle"></button>` : ""}`;
+    reelsEl.appendChild(el);
+    reelEls[key] = { el, strip: el.querySelector(".strip"), hold: el.querySelector(".hold"), toggle: el.querySelector("[data-act=toggle]") };
+  });
+  refresh();
+}
+
+function refresh(){
+  ORDER.forEach(key => {
+    const r = reelEls[key];
+    r.el.classList.toggle("held", state.held[key]);
+    r.el.classList.toggle("off", !state.enabled[key]);
+    r.hold.classList.toggle("on", state.held[key]);
+    r.hold.textContent = state.held[key] ? "Held" : "Hold";
+    r.hold.disabled = !state.enabled[key];
+    if(r.toggle) r.toggle.textContent = state.enabled[key] ? "drop twist" : "add a twist";
+    if(!spinningKeys.has(key)){
+      r.strip.style.transition = "none";
+      r.strip.style.transform = "translateY(0)";
+      r.strip.innerHTML = cell(state.enabled[key] ? (state.value[key] ?? "—") : "off");
+    }
+  });
+  renderPitch();
+}
+
+function pitchText(){
+  const g = state.value.genre, s = state.value.style, m = state.value.mechanic, t = state.enabled.twist ? state.value.twist : null;
+  if(!g||!s||!m) return null;
+  return `${g} in ${s.toLowerCase()}. The loop: ${m.charAt(0).toLowerCase()+m.slice(1)}.` + (t ? ` Twist: ${t.toLowerCase()}.` : "");
+}
+function renderPitch(){ pitchEl.textContent = pitchText() ?? "Pull the lever."; }
+
+reelsEl.addEventListener("click", e => {
+  const btn = e.target.closest("button"); if(!btn) return;
+  const key = e.target.closest(".reel").dataset.key;
+  if(btn.dataset.act==="hold"){ state.held[key] = !state.held[key]; click(); }
+  if(btn.dataset.act==="toggle"){
+    state.enabled[key] = !state.enabled[key];
+    if(!state.enabled[key]) state.held[key] = false;
+    refresh();
+    if(state.enabled[key]) spin([key]);
+    return;
+  }
+  refresh();
+});
+
+// ---- sound (synth, no files) ----
+let audio = null, soundOn = true;
+try { soundOn = localStorage.getItem("scrambler.sound") !== "off"; } catch {}
+function ac(){ if(!audio){ try{ audio = new (window.AudioContext||window.webkitAudioContext)(); }catch{} } if(audio && audio.state==="suspended") audio.resume(); return audio; }
+function tone(freq, dur, type="square", gain=.08, when=0){
+  const a = ac(); if(!a||!soundOn) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(gain, a.currentTime+when);
+  g.gain.exponentialRampToValueAtTime(.0001, a.currentTime+when+dur);
+  o.connect(g).connect(a.destination); o.start(a.currentTime+when); o.stop(a.currentTime+when+dur+.02);
+}
+function click(){ tone(900,.04,"square",.05); }
+function clunk(){ tone(180,.09,"triangle",.18); tone(90,.12,"sawtooth",.08); }
+function jackpot(){ [523,659,784,1047].forEach((f,i)=>tone(f,.25,"square",.07,i*.09)); }
+let tickTimer = null;
+function startTicks(){ stopTicks(); tickTimer = setInterval(()=>tone(2200,.015,"square",.025), 70); }
+function stopTicks(){ if(tickTimer){ clearInterval(tickTimer); tickTimer=null; } }
+
+const soundBtn = document.getElementById("sound");
+function renderSound(){ soundBtn.textContent = "Sound: " + (soundOn?"on":"off"); }
+soundBtn.addEventListener("click", ()=>{ soundOn=!soundOn; try{localStorage.setItem("scrambler.sound", soundOn?"on":"off");}catch{} renderSound(); if(soundOn) click(); });
+renderSound();
+
+// ---- spinning ----
+const spinningKeys = new Set();
+function spinReel(key, idx){
+  return new Promise(res => {
+    const r = reelEls[key];
+    const fillers = Array.from({length: 10 + idx*5}, ()=>rnd(key));
+    const target = pick(key);
+    const after = rnd(key);
+    r.strip.style.transition = "none";
+    r.strip.innerHTML = cell(state.value[key] ?? "—") + fillers.map(f=>cell(f,true)).join("") + cell(target) + cell(after,true);
+    r.strip.style.transform = "translateY(0)";
+    r.strip.getBoundingClientRect();
+    const n = fillers.length + 1;
+    const dur = 1.0 + idx*.45;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const finish = () => {
+      state.value[key] = target;
+      spinningKeys.delete(key);
+      r.strip.style.transition = "none";
+      r.strip.innerHTML = cell(target);
+      r.strip.style.transform = "translateY(0)";
+      clunk();
+      res();
+    };
+    if(reduced){ finish(); return; }
+    r.strip.style.transition = `transform ${dur}s cubic-bezier(.12,.8,.2,1.06)`;
+    r.strip.style.transform = `translateY(-${n*CELL}px)`;
+    let done = false;
+    const once = () => { if(done) return; done = true; finish(); };
+    r.strip.addEventListener("transitionend", once, {once:true});
+    setTimeout(once, dur*1000 + 150);
+  });
+}
+
+let busy = false;
+async function spin(keys){
+  if(busy) return;
+  keys = keys.filter(k => state.enabled[k] && !state.held[k]);
+  if(!keys.length) return;
+  busy = true; ac();
+  document.getElementById("spin").disabled = true;
+  machine.classList.remove("win"); machine.classList.add("spinning");
+  keys.forEach(k => spinningKeys.add(k));
+  startTicks();
+  await Promise.all(keys.map((k,i)=>spinReel(k,i)));
+  stopTicks();
+  machine.classList.remove("spinning"); machine.classList.add("win");
+  jackpot();
+  busy = false;
+  document.getElementById("spin").disabled = false;
+  refresh();
+}
+
+document.getElementById("spin").addEventListener("click", ()=>spin(ORDER));
+const lever = document.getElementById("lever");
+lever.querySelector("button").addEventListener("click", ()=>{
+  if(busy) return;
+  lever.classList.add("pulled");
+  setTimeout(()=>lever.classList.remove("pulled"), 450);
+  setTimeout(()=>spin(ORDER), 180);
+});
+
+// ---- copy / save ----
+function flash(id, msg){ const b = document.getElementById(id); const old = b.textContent; b.textContent = msg; setTimeout(()=>b.textContent=old, 1200); }
+document.getElementById("copy").addEventListener("click", async () => {
+  const p = pitchText(); if(!p) return;
+  const text = ORDER.filter(k=>state.enabled[k]).map(k=>`${DATA[k].label.replace(" (optional)","")}: ${state.value[k]}`).join("\n") + "\n\n" + p;
+  try { await navigator.clipboard.writeText(text); flash("copy","Copied"); } catch { flash("copy","Copy failed"); }
+});
+
+let history = [];
+try { history = JSON.parse(localStorage.getItem("scrambler.saved")||"[]"); } catch {}
+function persist(){ try { localStorage.setItem("scrambler.saved", JSON.stringify(history)); } catch {} }
+document.getElementById("save").addEventListener("click", saveCurrent);
+function saveCurrent(){
+  const p = pitchText(); if(!p || busy) return;
+  history.unshift({ text:p, star:false, ts:Date.now() });
+  history = history.slice(0,50);
+  persist(); renderHistory(); flash("save","Saved");
+}
+function renderHistory(){
+  histEl.innerHTML = "";
+  emptyEl.style.display = history.length ? "none" : "";
+  history.forEach((h,i) => {
+    const li = document.createElement("li"); li.className = h.star?"star":"";
+    li.innerHTML = `<span class="txt">${esc(h.text)}</span><button class="plain" data-i="${i}" data-a="star" title="Star">${h.star?"★":"☆"}</button><button class="plain" data-i="${i}" data-a="del" title="Remove">×</button>`;
+    histEl.appendChild(li);
+  });
+}
+histEl.addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  const i = +b.dataset.i;
+  if(b.dataset.a==="star") history[i].star = !history[i].star;
+  if(b.dataset.a==="del") history.splice(i,1);
+  persist(); renderHistory();
+});
+
+document.addEventListener("keydown", e => {
+  if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+  if(e.code==="Space"){ e.preventDefault(); lever.querySelector("button").click(); }
+  else if(e.key>="1" && e.key<="4"){ const k = ORDER[+e.key-1]; if(state.enabled[k]){ state.held[k]=!state.held[k]; click(); refresh(); } }
+  else if(e.key==="s"||e.key==="S"){ saveCurrent(); }
+});
+
+buildReels(); renderHistory();
+ORDER.forEach(k => { if(state.enabled[k]) state.value[k] = pick(k); });
+refresh();
+</script>
+</body>
+</html>

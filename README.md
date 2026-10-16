@@ -1,0 +1,34 @@
+# Lantern
+
+An HTML5 canvas game, deployed on Cloudflare Pages and embedded (iframe) into another website.
+
+Survival horror, isometric low-poly. Your cursor is the only light. A crowd of frightened villagers
+follows it, and the dark follows them. Lead everyone from one safe house to the next. Each night is
+longer and worse than the last. The game narrates your mistakes, by name.
+
+- `public/index.html` — the entire game (no build step, no dependencies, no asset files)
+- `wrangler.jsonc` — Cloudflare Pages config (`assets.directory: ./public`)
+
+## How to play
+
+- Move the mouse. Villagers walk toward the light and huddle in it.
+- Anyone left in the dark too long panics and runs. Panicked people walk into ditches.
+- The light draws the dark too. Things that reach the bright core of the lantern burn.
+  Things that reach a villager outside the core drag them away. Swing the light over them to break the grab.
+- Click to drop a salt line (if you bought salt). `M` mutes, `P` pauses.
+- Between nights, the village pays per head delivered. Spend it on a brighter lantern, a bell,
+  courage, torchbearers, dogs and salt.
+
+## Run locally
+
+    python3 -m http.server 8000 -d public
+
+## Deploy
+
+    npx wrangler pages deploy
+
+## Embed
+
+    <iframe src="https://<your-pages-domain>/" width="540" height="960" style="border:0" allow="autoplay"></iframe>
+
+The game letterboxes a 540x960 playfield to any iframe size.

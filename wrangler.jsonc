@@ -1,0 +1,10 @@
+// Cloudflare Pages config for Lantern (HTML5 game, embedded via iframe on another site).
+// Deploy with: npx wrangler pages deploy
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "lantern",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public"
+  }
+}
