@@ -315,8 +315,8 @@ function fill(t, d) {
     .replace(/\{S\}/g, pr.s[0].toUpperCase() + pr.s.slice(1))
     .replace(/\{n\}/g, d.n).replace(/\{k\}/g, d.k).replace(/\{d\}/g, d.d).replace(/\{l\}/g, d.l).replace(/\{level\}/g, d.level);
 }
-const PRI = { dawn: 3, relic: 2, oillow: 2, oilout: 3, oil: 1, gust: 2, call: 2, ending: 4, taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
-const COOLDOWN = { call: 10, oil: 20, panic: 9, idle: 20, toofast: 14, split: 25, burn: 18, bossnear: 16, grabbed: 6, salt: 12, nosalt: 30, mute: 2 };
+const PRI = { hold_tree: 3, hold_bridge: 3, hold_gate: 3, done_tree: 2, done_bridge: 2, done_gate: 2, siege: 1, dawn: 3, relic: 2, oillow: 2, oilout: 3, oil: 1, gust: 2, call: 2, ending: 4, taken: 3, fell: 3, rescue: 3, lastone: 3, gameover: 4, levelstart: 2, shop: 2, perfect: 2, partial: 2, grabbed: 2, bossnear: 2, streak: 3, panic: 1, idle: 1, toofast: 1, split: 1, slow: 1, burn: 0, salt: 1, nosalt: 1, buy: 1, mute: 0, pause: 0 };
+const COOLDOWN = { siege: 28, call: 10, oil: 20, panic: 9, idle: 20, toofast: 14, split: 25, burn: 18, bossnear: 16, grabbed: 6, salt: 12, nosalt: 30, mute: 2 };
 const LINES = {
   levelstart: (d, m) => {
     if (NIGHT_START[d.level]) return NIGHT_START[d.level];
@@ -380,6 +380,13 @@ const LINES = {
     return ['{name} heard {p} name in the dark. People always go when they hear their name. You would.', 'Someone is saying {name}. It is not me. It is not you.'];
   },
   ending: d => ENDINGS[d.kind],
+  hold_tree: () => ['A tree across the road. It did not fall. It was laid. Three of them can move it, if they can see.', 'The road is blocked. They will need to work at it. Working people stand still. Still people are easy.'],
+  hold_bridge: () => ['The bridge is out. Planks in the ravine. Two of them can mend it, if the light holds.', 'Someone broke the bridge. Someone wanted you to stop here. Mend it. Quickly.'],
+  hold_gate: () => ['A gate. The lock wants light to see by. Put the lantern on it and think about what is behind you.', 'Locked. Hold the light on the lock. The dark will hold its own light on them.'],
+  done_tree: () => ['Cleared. It took three of them and the light. Remember it took the light.', 'The road is open. Nothing that was watching has left.'],
+  done_bridge: () => ['The bridge holds. For now. Everything holds for now.', 'Mended. Cross before it remembers it was broken.'],
+  done_gate: () => ['Open. Do not ask who built a gate in the middle of a wood.', 'The lock gives. The gate was never the thing keeping you here.'],
+  siege: () => ['They are gathering. They know you cannot leave.', 'More of them every moment you stand here. Stand anyway. Then go.'],
 };
 
 // ---------------------------------------------------------------------------
@@ -446,7 +453,7 @@ const cost = (u, lv) => Math.round(u.base * Math.pow(u.mult, lv) / 5) * 5;
 // ---------------------------------------------------------------------------
 // Game state
 // ---------------------------------------------------------------------------
-const V_SPEED = 74, V_PANIC = 112, PATH_HW = 85;
+const V_SPEED = 84, V_PANIC = 122, PATH_HW = 85;
 let paused = false;
 const G = {
   state: 'title', time: 0, level: 0, levelT: 0, coins: 0, best: store.get('ln_best', 0),
@@ -466,7 +473,7 @@ function fearRate() { return 0.3 * Math.pow(0.85, G.up.courage); }
 // Level geometry -------------------------------------------------------------
 function genLevel(n) {
   const seed = n * 7919 + 13;
-  const len = 1300 + n * 180;
+  const len = 2400 + n * 320;
   const s1 = hash(seed) * TAU, s2 = hash(seed + 1) * TAU, s3 = hash(seed + 2) * TAU;
   const amp = Math.min(130, 55 + n * 9);
   const lat = p => amp * Math.sin(p / 430 + s1) + 42 * Math.sin(p / 160 + s2) + 16 * Math.sin(p / 58 + s3);
@@ -500,7 +507,7 @@ function genLevel(n) {
     const p = lerp(250, len - 250, hash(seed + 900 + i * 2));
     rocks.push({ l: lat(p) + (hash(seed + 901 + i * 2) - 0.5) * PATH_HW * 1.6, p, a: 5 + hash(seed + i) * 4, b: 5 + hash(seed + i + 5) * 4, h: 5 + hash(seed + i + 9) * 5 });
   }
-  const nd = 2 + Math.floor(n / 2);
+  const nd = 3 + n;
   for (let i = 0; i < nd; i++) {
     const p = lerp(260, len - 260, (i + 0.2 + hash(seed + 500 + i) * 0.6) / nd);
     const side = hash(seed + 600 + i) < 0.5 ? -1 : 1;
@@ -517,13 +524,31 @@ function genLevel(n) {
     const side = hash(seed + 1100 + i) < 0.5 ? -1 : 1;
     relics.push({ kind: RELIC_ORDER[idx], l: lat(p) + side * (PATH_HW - 30 + hash(seed + 1200 + i) * 50), p, seen: false });
   }
-  const nf = 2;
+  const nf = Math.max(3, Math.round(len / 800));
   for (let i = 0; i < nf; i++) {
     const p = lerp(300, len - 300, (i + 0.2 + hash(seed + 1300 + i) * 0.6) / nf);
     flasks.push({ l: lat(p) + (hash(seed + 1400 + i) - 0.5) * PATH_HW * 1.4, p, taken: false });
   }
-  return { n, len, lat, trees, rocks, ditches, relics, flasks, grid, CELL, start: { l: lat(0), p: 0 }, end: { l: lat(len), p: len }, boss: n % 5 === 0 };
+  // holds: obstacles that stop the road until they are dealt with
+  const holds = [];
+  const nh = n <= 2 ? 1 : n <= 5 ? 2 : 3;
+  const KINDS = ['tree', 'bridge', 'gate'];
+  for (let i = 0; i < nh; i++) {
+    const p = Math.round(lerp(0.28, 0.86, (i + 0.5 + (hash(seed + 2000 + i) - 0.5) * 0.5) / nh) * len);
+    const kind = KINDS[(n - 1 + i) % 3];
+    const l = lat(p);
+    const h = { kind, p, l, progress: 0, done: false, active: false, workers: [], spots: [], need: kind === 'tree' ? 3 : kind === 'bridge' ? 2 : 0, secs: kind === 'tree' ? 9 : kind === 'bridge' ? 12 : 7, id: i };
+    if (kind === 'tree') h.spots = [{ l: l - 44, p: p - 16 }, { l: l + 44, p: p - 16 }, { l, p: p - 20 }];
+    if (kind === 'bridge') h.spots = [{ l: l - 22, p: p - 34 }, { l: l + 22, p: p - 34 }];
+    holds.push(h);
+  }
+  const farFromHold = o => holds.every(h => Math.abs(o.p - h.p) > 130);
+  const rocks2 = rocks.filter(farFromHold), ditches2 = ditches.filter(farFromHold), relics2 = relics.filter(farFromHold), flasks2 = flasks.filter(farFromHold);
+  // clear trees right around a hold so the work spots are reachable
+  for (const h of holds) for (const t of trees) if (Math.abs(t.p - h.p) < 60 && Math.abs(t.l - h.l) < PATH_HW + 40) t.s = 0.001;
+  return { n, len, lat, trees, rocks: rocks2, ditches: ditches2, relics: relics2, flasks: flasks2, holds, grid, CELL, start: { l: lat(0), p: 0 }, end: { l: lat(len), p: len }, boss: n % 5 === 0 };
 }
+function holdActive() { return G.lv && G.lv.holds.some(h => h.active && !h.done); }
 function nearTrees(l, p) {
   const lv = G.lv, out = [];
   const cx = (l / lv.CELL) | 0, cy = (p / lv.CELL) | 0;
@@ -539,6 +564,11 @@ function collideSolid(e, rad) {
     const dl = e.l - r.l, dp = e.p - r.p, d = Math.hypot(dl, dp), m = rad + Math.max(r.a, r.b);
     if (d < m && d > 0.01) { e.l += dl / d * (m - d); e.p += dp / d * (m - d); }
   }
+  // holds block the road until done
+  for (const h of G.lv.holds) {
+    if (h.done) continue;
+    if (e.p > h.p - 18 - rad && e.p < h.p + 18) e.p = h.p - 18 - rad;
+  }
   // the start house is solid (the end house is entered)
   { const h = G.lv.start, dl = e.l - h.l, dp = e.p - h.p, d = Math.hypot(dl, dp), m = rad + 52;
     if (d < m && d > 0.01) { e.l += dl / d * (m - d); e.p += dp / d * (m - d); } }
@@ -550,14 +580,14 @@ function collideSolid(e, rad) {
 
 // Villagers ------------------------------------------------------------------
 function makeVillager() {
-  return { lure: null, name: nextName(), pr: pick(PRON), cloak: pick(CLOAKS), skin: pick(SKINS), hat: Math.random() < 0.35,
+  return { lure: null, job: null, working: false, name: nextName(), pr: pick(PRON), cloak: pick(CLOAKS), skin: pick(SKINS), hat: Math.random() < 0.35,
     l: 0, p: 0, vl: 0, vp: 0, pl: 0, pp: 0, fear: 0, state: 'calm', heading: rand(0, TAU), walk: Math.random() * 10, fade: 1, torch: false, by: null, h: 0 };
 }
 function placeFlock() {
   const lv = G.lv;
   G.villagers.forEach((v, i) => {
     v.l = lv.start.l + rand(-40, 40); v.p = 70 + rand(0, 90) + i * 2;
-    v.state = 'calm'; v.fear = 0; v.vl = v.vp = v.pl = v.pp = 0; v.fade = 1; v.by = null; v.h = 0; v.lure = null;
+    v.state = 'calm'; v.fear = 0; v.vl = v.vp = v.pl = v.pp = 0; v.fade = 1; v.by = null; v.h = 0; v.lure = null; v.job = null; v.working = false;
   });
 }
 function updateVillager(v, dt) {
@@ -569,12 +599,18 @@ function updateVillager(v, dt) {
   if (lit) v.fear = Math.max(0, v.fear - dt * 1.1);
   else v.fear = Math.min(1.5, v.fear + dt * fearRate());
   if (v.state === 'calm' && v.fear >= 1) {
-    v.state = 'panic'; v.heading = rand(0, TAU); N.mem.panics++; N.ev('panic', { v }); sfx.yelp();
+    v.state = 'panic'; v.heading = rand(0, TAU); N.mem.panics++; N.ev('panic', { v }); sfx.yelp(); dropJob(v);
     addText('!', v.l, v.p, 30, '#ff9a5a', 16, 0.8);
   }
   if (v.state === 'panic' && v.fear < 0.35) v.state = 'calm';
   let ax = 0, ay = 0;
-  if (v.state === 'calm') {
+  v.working = false;
+  if (v.state === 'calm' && v.job && !v.job.done) {
+    const sp_ = v.job.spots[v.spot];
+    const jl = sp_.l - v.l, jp = sp_.p - v.p, jd = Math.hypot(jl, jp);
+    if (jd > 10) { ax += jl / jd * Math.min(V_SPEED, jd * 2 + 20); ay += jp / jd * Math.min(V_SPEED, jd * 2 + 20); }
+    else { v.l = sp_.l; v.p = sp_.p; v.vl = v.vp = 0; v.working = lit; if (lit && Math.random() < dt * 4) burst(v.l, v.p, 8, v.job.kind === 'bridge' ? '#8a6a3a' : '#5a4a2a', 1, 40, 2); }
+  } else if (v.state === 'calm') {
     if (d < sight()) {
       const sp = clamp((d - 12) * 1.6, 0, V_SPEED);
       if (d > 12) { ax += dl / d * sp; ay += dp / d * sp; }
@@ -600,8 +636,10 @@ function updateVillager(v, dt) {
   }
   const k = 1 - Math.exp(-dt * 6);
   v.vl += (ax - v.vl) * k; v.vp += (ay - v.vp) * k;
-  // separation
+  // separation (a villager on the job holds their ground; everyone else steps around them)
+  const onJob = v.job && !v.job.done && v.working;
   for (const o of G.villagers) {
+    if (onJob) break;
     if (o === v || o.state === 'safe' || o.state === 'lost' || o.state === 'grabbed') continue;
     const sl = v.l - o.l, sp = v.p - o.p, sd = Math.hypot(sl, sp);
     if (sd < 18 && sd > 0.01) { const push = (18 - sd) * 0.5; v.l += sl / sd * push; v.p += sp / sd * push; }
@@ -631,8 +669,10 @@ function inAnyCore(e) {
   return false;
 }
 function living() { return G.villagers.filter(v => v.state === 'calm' || v.state === 'panic' || v.state === 'grabbed'); }
+function dropJob(v) { if (v.job) { v.job.workers = v.job.workers.filter(w => w !== v); v.job = null; v.working = false; } }
 function loseVillager(v, cause, ditch) {
   if (v.state === 'lost') return;
+  dropJob(v);
   if (v.by) { v.by.carry = null; }
   v.state = 'lost'; v.fade = 1; v.cause = cause; v.by = null;
   G.lostLevel++;
@@ -676,7 +716,7 @@ function spawnMonster(boss = false) {
     l = clamp(l, lat - PATH_HW - 160, lat + PATH_HW + 160);
     if (Math.hypot(l - L.l, p - L.p) < 240) p = L.p + (p > L.p ? 300 : -300);
   }
-  G.monsters.push({ l, p, spd: boss ? 40 : Math.min(90, 34 + G.level * 3.5) * rand(0.9, 1.1), burn: 0, carry: null, carryT: 0, boss, sway: rand(0, TAU), alive: true, h: boss ? 92 : 34, fadeIn: 0 });
+  G.monsters.push({ l, p, spd: boss ? 44 : Math.min(96, 40 + G.level * 3.5) * rand(0.9, 1.1), burn: 0, carry: null, carryT: 0, boss, sway: rand(0, TAU), alive: true, h: boss ? 92 : 34, fadeIn: 0 });
   if (boss) sfx.boss();
 }
 function updateMonster(m, dt) {
@@ -722,7 +762,7 @@ function updateMonster(m, dt) {
   } else m.burn = Math.max(0, m.burn - dt * 2);
 }
 function grab(m, v) {
-  v.state = 'grabbed'; v.by = m; v.dl = rand(-4, 4); v.dp = rand(-4, 4); v.lure = null;
+  v.state = 'grabbed'; v.by = m; v.dl = rand(-4, 4); v.dp = rand(-4, 4); v.lure = null; dropJob(v);
   m.carry = v; m.carryT = 0;
   sfx.grab(); G.shake = 3;
   N.ev('grabbed', { v });
@@ -745,6 +785,43 @@ function centroid() {
   return { l: l / live.length, p: p / live.length };
 }
 
+// Holds ----------------------------------------------------------------------
+function updateHold(h, dt) {
+  if (h.done) return;
+  const L = G.lantern;
+  if (!h.active) {
+    const near = G.villagers.some(v => (v.state === 'calm' || v.state === 'panic') && v.p > h.p - 170 && Math.abs(v.l - h.l) < PATH_HW + 60);
+    if (near || Math.hypot(L.l - h.l, L.p - h.p) < 120) { h.active = true; h.t = 0; N.ev('hold_' + h.kind); sfx.boss(); G.shake = 4; }
+    return;
+  }
+  h.t += dt;
+  if (h.kind === 'gate') {
+    if (Math.hypot(L.l - h.l, L.p - h.p) < 48) { h.progress += dt / h.secs; if (Math.random() < dt * 6) ember(h.l + rand(-6, 6), h.p + rand(-6, 6), rand(10, 24)); }
+  } else {
+    // keep the crew filled from calm villagers nearest the obstacle
+    h.workers = h.workers.filter(v => v.state === 'calm' && v.job === h);
+    if (h.workers.length < h.need && Math.floor(h.t * 2) !== Math.floor((h.t - dt) * 2)) {
+      const cands = G.villagers.filter(v => v.state === 'calm' && !v.job && !v.lure).sort((a, b) => Math.hypot(a.l - h.l, a.p - h.p) - Math.hypot(b.l - h.l, b.p - h.p));
+      for (const v of cands) {
+        if (h.workers.length >= h.need) break;
+        const used = h.workers.map(w => w.spot);
+        v.spot = [0, 1, 2].find(i => i < h.spots.length && !used.includes(i));
+        v.job = h; h.workers.push(v);
+      }
+    }
+    const working = h.workers.filter(v => v.working).length;
+    h.progress += dt * working / (h.need * h.secs);
+    if (working && Math.floor(h.t * 3) !== Math.floor((h.t - dt) * 3)) sfx.nip();
+  }
+  if (h.progress >= 1) {
+    h.done = true; h.progress = 1;
+    for (const v of h.workers) { v.job = null; v.working = false; }
+    h.workers = [];
+    N.ev('done_' + h.kind); sfx.arrive(); G.shake = 5;
+    for (let i = 0; i < 20; i++) burst(h.l + rand(-PATH_HW, PATH_HW), h.p, 6, '#6a5a3a', 1, 70, 3);
+  }
+}
+
 // Dogs -----------------------------------------------------------------------
 function updateDog(d, dt) {
   const L = G.lantern;
@@ -752,6 +829,7 @@ function updateDog(d, dt) {
   let target = null, best = -1;
   for (const v of G.villagers) {
     if (v.state !== 'calm' && v.state !== 'panic') continue;
+    if (v.job && !v.job.done) continue;
     const dl = Math.hypot(v.l - L.l, v.p - L.p);
     if (dl > L.r * 0.7 && dl < sight() * 1.6 && dl > best) { best = dl; target = v; }
   }
@@ -811,7 +889,7 @@ function startLevel() {
   G.dogs = []; for (let i = 0; i < G.up.dog; i++) G.dogs.push({ id: i, l: G.lv.start.l + rand(-30, 30), p: 40 + i * 10, vl: 0, vp: 0, walk: 0, cool: 0 });
   G.saltLeft = G.up.salt;
   G.delivered = 0; G.lostLevel = 0; G.levelT = 0; G.spawnT = 4; G.idleT = 0; G.fastT = 0; G.slowSaid = false; G.bossSaid = false;
-  G.maxMon = 1 + Math.floor(G.level * 1.1);
+  G.maxMon = 2 + Math.floor(G.level * 1.2);
   G.oil = 1; G.oilSaid = 0; G.gust = { next: rand(22, 34), phase: 'calm', t: 0 }; G.callT = rand(6, 10); G.whisperT = 6;
   G.lastLiving = living().length;
   cam.l = G.lv.start.l; cam.p = 100;
@@ -918,11 +996,11 @@ function update(dt) {
 
   G.levelT += dt;
   // oil burns down; flasks on the road refill it
-  G.oil = Math.max(0, G.oil - dt / 85);
+  G.oil = Math.max(0, G.oil - dt / 115);
   if (G.oil < 0.4 && G.oilSaid < 1) { G.oilSaid = 1; N.ev('oillow'); }
   if (G.oil < 0.12 && G.oilSaid < 2) { G.oilSaid = 2; N.ev('oilout'); }
   for (const f of G.lv.flasks) {
-    if (!f.taken && Math.hypot(f.l - L.l, f.p - L.p) < 24) { f.taken = true; G.oil = Math.min(1, G.oil + 0.55); sfx.chime(); N.ev('oil'); addText('oil', f.l, f.p, 20, '#ffd27a', 14, 1); for (let i = 0; i < 8; i++) ember(f.l, f.p, 6); }
+    if (!f.taken && Math.hypot(f.l - L.l, f.p - L.p) < 24) { f.taken = true; G.oil = Math.min(1, G.oil + 0.6); sfx.chime(); N.ev('oil'); addText('oil', f.l, f.p, 20, '#ffd27a', 14, 1); for (let i = 0; i < 8; i++) ember(f.l, f.p, 6); }
   }
   // gusts
   const gu = G.gust;
@@ -948,17 +1026,20 @@ function update(dt) {
   }
   for (const v of G.villagers) updateVillager(v, dt);
   G.villagers = G.villagers.filter(v => v.state !== 'lost' || v.fade > -0.2);
+  for (const h of G.lv.holds) updateHold(h, dt);
+  if (holdActive() && G.monsters.length >= 4) N.ev('siege');
   for (const d of G.dogs) updateDog(d, dt);
   // spawn
   G.spawnT -= dt;
   const alive = G.monsters.filter(m => m.alive && !m.boss).length;
   if (G.spawnT <= 0) {
-    if (alive < G.maxMon) spawnMonster(false);
-    let iv = Math.max(0.9, 6.5 - G.level * 0.4);
-    if (G.levelT > 75) iv *= 0.5;
+    if (alive < G.maxMon + (holdActive() ? 1 + Math.floor(G.level / 3) : 0)) spawnMonster(false);
+    let iv = Math.max(0.9, 5.5 - G.level * 0.4);
+    if (G.levelT > 110) iv *= 0.5;
+    if (holdActive()) iv *= 0.6;
     G.spawnT = iv * rand(0.7, 1.3);
   }
-  if (G.levelT > 75 && !G.slowSaid) { G.slowSaid = true; N.ev('slow'); }
+  if (G.levelT > 110 && !G.slowSaid) { G.slowSaid = true; N.ev('slow'); }
   for (const m of G.monsters) if (m.alive) updateMonster(m, dt);
   G.monsters = G.monsters.filter(m => m.alive);
   // boss proximity
@@ -1075,6 +1156,49 @@ function drawRelic(r) {
   else if (k === 'tally') { isoBox(r.l, r.p, 3, 3, 30, '#2a2420'); const s = toScreen(r.l, r.p, 14); ctx.strokeStyle = '#8a7a66'; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 5; i++) { ctx.moveTo(s.x - 4 + i * 2, s.y - 5); ctx.lineTo(s.x - 4 + i * 2, s.y + (i === 4 ? 0 : 5)); } ctx.stroke(); }
   else if (k === 'bones') { const s = toScreen(r.l, r.p); ctx.strokeStyle = '#cfc6b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x - 9, s.y - 2); ctx.lineTo(s.x + 6, s.y + 3); ctx.moveTo(s.x - 2, s.y + 5); ctx.lineTo(s.x + 9, s.y - 3); ctx.stroke(); ctx.fillStyle = '#cfc6b0'; ctx.beginPath(); ctx.arc(s.x - 10, s.y - 6, 3.5, 0, TAU); ctx.fill(); }
 }
+function drawHold(h) {
+  const s = toScreen(h.l, h.p);
+  const w = PATH_HW + 24;
+  if (h.kind === 'tree') {
+    const off = h.done ? w * 0.95 : 0;
+    const x = s.x + off, y = s.y + (h.done ? 10 : 0);
+    poly([[x - w, y - 2], [x + w, y - 2], [x + w, y + 8], [x - w, y + 8]], '#2e2016');
+    poly([[x - w, y - 12], [x + w, y - 12], [x + w, y - 2], [x - w, y - 2]], '#4a3424');
+    poly([[x - w, y - 14], [x + w, y - 14], [x + w, y - 12], [x - w, y - 12]], '#5a4430');
+    ctx.fillStyle = '#6a5038'; ctx.beginPath(); ctx.ellipse(x + w, y - 3, 4, 7, 0, 0, TAU); ctx.fill();
+    for (let i = 0; i < 4; i++) { const bx = x - w + 20 + i * 40; poly([[bx, y - 12], [bx + 12, y - 12], [bx + 6 + (i % 2 ? 10 : -10), y - 34]], i % 2 ? '#17352c' : '#3a2a1c'); }
+  } else if (h.kind === 'bridge') {
+    poly([[s.x - w - 30, s.y - 14], [s.x + w + 30, s.y - 14], [s.x + w + 30, s.y + 14], [s.x - w - 30, s.y + 14]], '#040509');
+    ctx.strokeStyle = '#1f2231'; ctx.lineWidth = 2; ctx.strokeRect(s.x - w - 30, s.y - 14, (w + 30) * 2, 28);
+    const planks = Math.round(h.progress * 9);
+    for (let i = 0; i < 9; i++) {
+      const px = s.x - 36 + i * 9;
+      if (i < planks || h.done) poly([[px - 3, s.y - 15], [px + 3, s.y - 15], [px + 3, s.y + 15], [px - 3, s.y + 15]], i % 2 ? '#6a4a2a' : '#7a5a36');
+      else if (i % 3 === 0) poly([[px - 3, s.y + 2], [px + 4, s.y - 1], [px + 5, s.y + 9], [px - 2, s.y + 11]], '#3a2a1a');
+    }
+  } else {
+    isoBox(h.l - PATH_HW + 6, h.p, 5, 5, 34, '#4a3a2a');
+    isoBox(h.l + PATH_HW - 6, h.p, 5, 5, 34, '#4a3a2a');
+    const y = s.y - 30;
+    poly([[s.x - PATH_HW + 6, y - 4], [s.x + PATH_HW - 6, y - 4], [s.x + PATH_HW - 6, y + 2], [s.x - PATH_HW + 6, y + 2]], '#5a4a3a');
+    if (!h.done) {
+      for (let i = -3; i <= 3; i++) { const gx = s.x + i * 20; poly([[gx - 4, s.y - 30], [gx + 4, s.y - 30], [gx + 4, s.y + 2], [gx - 4, s.y + 2]], '#2a2018'); }
+      ctx.fillStyle = `rgba(255,200,120,${0.5 + 0.5 * Math.sin(G.time * 5)})`; ctx.fillRect(s.x - 3, s.y - 14, 6, 6);
+      if (h.progress > 0) { ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.x, s.y - 11, 12, -Math.PI / 2, -Math.PI / 2 + TAU * h.progress); ctx.stroke(); }
+    } else {
+      for (let i = 0; i < 4; i++) { const gx = s.x - PATH_HW + 14 + i * 6; poly([[gx - 2, s.y - 30 - i * 2], [gx + 2, s.y - 30 - i * 2], [gx + 2, s.y + 2], [gx - 2, s.y + 2]], '#2a2018'); }
+    }
+  }
+  if (h.active && !h.done) {
+    const label = h.kind === 'tree' ? 'clearing' : h.kind === 'bridge' ? 'mending' : 'the lock';
+    const bx = s.x - 50, by = s.y - 58;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 4, by - 14, 108, 24);
+    text(label, s.x, by - 5, 11, 'rgba(232,220,192,0.85)', 'center', 700);
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(bx, by + 3, 100, 4);
+    ctx.fillStyle = '#ffd27a'; ctx.fillRect(bx, by + 3, 100 * h.progress, 4);
+    if (h.kind !== 'gate') for (const sp of h.spots) groundEllipse(sp.l, sp.p, 9, null, 'rgba(255,220,150,0.35)', [2, 4]);
+  }
+}
 function drawFlask(f) {
   if (f.taken) return;
   const bob = Math.sin(G.time * 4 + f.l) * 1.5;
@@ -1187,6 +1311,7 @@ function drawDarkness() {
   for (const h of [G.lv.end, G.lv.start]) if (h.doorS) { hole(h.doorS.x, h.doorS.y, 50, 0.8, 0.5); hole(h.winS.x, h.winS.y, 30, 0.8, 0.5); }
   for (const q of G.parts) if (q.col !== '#3a3426' && q.col !== '#1a1326') { const s = toScreen(q.l, q.p, q.h); hole(s.x, s.y, 14, 1, 0.5); }
   for (const f of G.lv.flasks) if (!f.taken) { const s = toScreen(f.l, f.p, 6); hole(s.x, s.y, 22, 0.7, 0.45); }
+  for (const h of G.lv.holds) if (h.kind === 'gate' && !h.done) { const s = toScreen(h.l, h.p, 11); hole(s.x, s.y, 16, 1, 0.5); }
   ctx.drawImage(dark, 0, 0);
   // warm tint
   ctx.save(); ctx.translate(ls.x, ls.y); ctx.scale(1, 0.64);
@@ -1265,6 +1390,7 @@ function drawWorld() {
   for (const r of G.lv.rocks) if (vis(r.l, r.p)) items.push({ p: r.p, f: () => drawRock(r) });
   for (const r of G.lv.relics) if (vis(r.l, r.p)) items.push({ p: r.p, f: () => drawRelic(r) });
   for (const f of G.lv.flasks) if (vis(f.l, f.p)) items.push({ p: f.p, f: () => drawFlask(f) });
+  for (const h of G.lv.holds) if (vis(h.l, h.p)) items.push({ p: h.p + (h.kind === 'bridge' ? -40 : 0), f: () => drawHold(h) });
   items.push({ p: G.lv.end.p + 20, f: () => drawHouse(G.lv.end, true) });
   items.push({ p: G.lv.start.p - 60, f: () => drawHouse(G.lv.start, false) });
   for (const v of G.villagers) items.push({ p: v.p, f: () => drawVillager(v) });
@@ -1315,6 +1441,7 @@ function drawHUD() {
   ctx.fillStyle = '#cfc6b0'; ctx.fillRect(bx, by, bw * prog, 3);
   ctx.fillStyle = '#ffb45a'; ctx.fillRect(bx + bw - 3, by - 4, 6, 11);
   for (const d of G.lv.ditches) { ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillRect(bx + bw * d.p / G.lv.len - 2, by - 1, 4, 5); }
+  for (const h of G.lv.holds) { ctx.fillStyle = h.done ? 'rgba(207,198,176,0.4)' : '#e8dcc0'; ctx.fillRect(bx + bw * h.p / G.lv.len - 2, by - 5, 4, 13); }
   const boss = G.monsters.find(m => m.boss);
   if (boss) { ctx.fillStyle = '#ff3a3a'; ctx.fillRect(bx + bw * clamp(boss.p / G.lv.len, 0, 1) - 2, by - 6, 4, 15); }
   drawMute();
@@ -1474,7 +1601,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Small debug/QA hook (harmless in production)
-window.__lantern = { G, N, cam, pointer, step: n => { for (let i = 0; i < n; i++) update(STEP); render(); }, start: startGame, startLevel, completeLevel, buy: buyUpgrade, UPGRADES, cost, R, sight };
+window.__lantern = { G, N, cam, pointer, holdActive, step: n => { for (let i = 0; i < n; i++) update(STEP); render(); }, start: startGame, startLevel, completeLevel, buy: buyUpgrade, UPGRADES, cost, R, sight };
 })();
 </script>
 </body>

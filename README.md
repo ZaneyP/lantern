@@ -19,6 +19,8 @@ name, and it has walked this road before.
 - The oil burns down over the night. Pass the light over flasks on the road to refill it.
 - Gusts gutter the flame for a moment. The dark rushes when it does.
 - Things in the dark call villagers by name. The one called will drift toward the voice unless the light holds them.
+- The road is blocked along the way. A fallen tree needs three villagers working in the light. A broken
+  bridge needs two. A gate lock only turns while the lantern sits on it. The dark gathers while you stand.
 - Nine houses to the city. Reach the gate and the road goes on.
 - Click to drop a salt line (if you bought salt). `M` mutes, `P` pauses.
 - Between nights, the village pays per head delivered. Spend it on a brighter lantern, a bell,
