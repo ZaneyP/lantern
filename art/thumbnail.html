@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lantern thumbnail</title>
+<style>html,body{margin:0;background:#06070e}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+(() => {
+'use strict';
+// Staged 16:9 key art drawn with the game's primitives. Deterministic: same picture every render.
+const W = 1920, H = 1080, FOCUS_Y = 560;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const TAU = Math.PI * 2;
+let seedState = 12345;
+const rnd = () => { seedState = (seedState * 1664525 + 1013904223) >>> 0; return seedState / 4294967296; };
+const rand = (a, b) => a + rnd() * (b - a);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+function hash(a) { a |= 0; a = Math.imul(a ^ (a >>> 16), 0x45d9f3b); a = Math.imul(a ^ (a >>> 16), 0x45d9f3b); a ^= a >>> 16; return (a >>> 0) / 4294967296; }
+const shadeCache = new Map();
+function shade(hex, amt) {
+  const key = hex + amt; let c = shadeCache.get(key); if (c) return c;
+  const n = parseInt(hex.slice(1), 16); let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (amt >= 0) { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; } else { r *= 1 + amt; g *= 1 + amt; b *= 1 + amt; }
+  c = `rgb(${r | 0},${g | 0},${b | 0})`; shadeCache.set(key, c); return c;
+}
+const cam = { l: 0, p: 0 };
+const T = 2.8; // world scale-up so the 540-wide art reads at 1920
+function toScreen(l, p, h = 0) { return { x: (l - cam.l) * T + W / 2, y: (p - cam.p) / 2 * T + FOCUS_Y - h * T }; }
+function toGround(sx, sy) { return { l: (sx - W / 2) / T + cam.l, p: (sy - FOCUS_Y) / T * 2 + cam.p }; }
+function poly(pts, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fill(); }
+function isoBox(l, p, a, b, h, col, baseH = 0, alpha = 1) {
+  const s = toScreen(l, p); a *= T; b *= T; h *= T; baseH *= T;
+  const cx = s.x, cy = s.y;
+  const A = [cx + (-a + b), cy + (-a - b) / 2], B = [cx + (a + b), cy + (a - b) / 2], C = [cx + (a - b), cy + (a + b) / 2], D = [cx + (-a - b), cy + (-a + b) / 2];
+  const y0 = -baseH, y1 = -baseH - h;
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  poly([[D[0], D[1] + y1], [C[0], C[1] + y1], [C[0], C[1] + y0], [D[0], D[1] + y0]], shade(col, -0.1));
+  poly([[C[0], C[1] + y1], [B[0], B[1] + y1], [B[0], B[1] + y0], [C[0], C[1] + y0]], shade(col, -0.34));
+  poly([[A[0], A[1] + y1], [B[0], B[1] + y1], [C[0], C[1] + y1], [D[0], D[1] + y1]], shade(col, 0.16));
+  if (alpha < 1) ctx.globalAlpha = 1;
+}
+function isoPyramid(l, p, a, b, h, col, baseH = 0) {
+  const s = toScreen(l, p); a *= T; b *= T; h *= T; baseH *= T;
+  const cx = s.x, cy = s.y - baseH;
+  const B = [cx + (a + b), cy + (a - b) / 2], C = [cx + (a - b), cy + (a + b) / 2], D = [cx + (-a - b), cy + (-a + b) / 2];
+  const apex = [cx, cy - h];
+  poly([apex, D, C], shade(col, -0.06)); poly([apex, C, B], shade(col, -0.36));
+}
+const PATH_HW = 85;
+const lat = p => 70 * Math.sin(p / 430 + 1.2) + 40 * Math.sin(p / 160 + 0.4);
+
+// ---- world ----
+const GROUND = ['#161d31', '#131a2c', '#182036'], PATH = ['#2f2819', '#342c1e', '#2a2418'];
+function drawGround() {
+  const TS = 28;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  for (const [sx, sy] of [[-100, -60], [W + 100, -60], [-100, H + 60], [W + 100, H + 60]]) {
+    const g = toGround(sx, sy); const u = (g.l + g.p) / 2, v = (g.p - g.l) / 2;
+    u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+  }
+  const batches = new Map();
+  for (let iu = Math.floor(u0 / TS); iu <= Math.ceil(u1 / TS); iu++) for (let iv = Math.floor(v0 / TS); iv <= Math.ceil(v1 / TS); iv++) {
+    const uc = (iu + 0.5) * TS, vc = (iv + 0.5) * TS, l = uc - vc, p = uc + vc;
+    const s = toScreen(l, p); if (s.x < -80 || s.x > W + 80 || s.y < -40 || s.y > H + 40) continue;
+    const d = Math.abs(l - lat(p)); const j = hash(iu * 131 + iv * 7 + 31);
+    let col; if (d < PATH_HW) col = PATH[(j * 3) | 0]; else if (d < PATH_HW + 44) col = (j < (d - PATH_HW) / 44) ? GROUND[(j * 3) | 0] : PATH[(j * 3) | 0]; else col = GROUND[(j * 3) | 0];
+    let b = batches.get(col); if (!b) { b = []; batches.set(col, b); } b.push(s.x, s.y);
+  }
+  const half = TS * T;
+  for (const [col, b] of batches) { ctx.fillStyle = col; ctx.beginPath(); for (let i = 0; i < b.length; i += 2) { const x = b[i], y = b[i + 1]; ctx.moveTo(x, y - half / 2); ctx.lineTo(x + half, y); ctx.lineTo(x, y + half / 2); ctx.lineTo(x - half, y); } ctx.fill(); }
+}
+function drawTree(t) {
+  const s = t.s;
+  isoBox(t.l, t.p, 2.5 * s, 2.5 * s, 10 * s, '#2a1f18');
+  isoPyramid(t.l, t.p, 13 * s, 13 * s, 26 * s, '#17352c', 8 * s);
+  isoPyramid(t.l, t.p, 10 * s, 10 * s, 24 * s, '#1b4034', 22 * s);
+  isoPyramid(t.l, t.p, 6.5 * s, 6.5 * s, 20 * s, '#1f4a3a', 36 * s);
+}
+function drawVillager(v) {
+  const bob = v.bob || 0;
+  isoBox(v.l, v.p, 4, 4, 12, v.cloak, bob);
+  isoBox(v.l, v.p, 2.8, 2.8, 5.5, v.skin, bob + 12);
+  if (v.hat) isoBox(v.l, v.p, 3.4, 3.4, 2, shade(v.cloak, -0.3), bob + 17.5);
+  if (v.torch) {
+    const f = toScreen(v.l + 6, v.p, bob + 20);
+    ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 1.5 * T; ctx.beginPath(); ctx.moveTo(f.x, f.y + 10 * T); ctx.lineTo(f.x, f.y); ctx.stroke();
+    poly([[f.x - 3 * T, f.y], [f.x + 3 * T, f.y], [f.x, f.y - 9 * T]], '#ff8a2a'); poly([[f.x - 1.5 * T, f.y], [f.x + 1.5 * T, f.y], [f.x, f.y - 5 * T]], '#ffd27a');
+  }
+}
+const eyes = [];
+function drawMonster(m) {
+  const col = m.boss ? '#0a0812' : '#07060e';
+  const sc = (m.boss ? 2.2 : 1.2) * T;
+  const s = toScreen(m.l, m.p);
+  const hover = m.hover || 0, sway = m.sway || 0, dir = m.dir, reach = m.reach;
+  ctx.save(); ctx.globalAlpha = 0.95; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const hipY = s.y - 20 * sc - hover, hipX = s.x + sway * 0.3;
+  ctx.lineWidth = 1.5 * sc;
+  for (const side of [-1, 1]) {
+    const drag = 9 * sc + side * 1.5 * sc;
+    const fx = s.x + side * 4.5 * sc - Math.cos(dir) * drag, fy = s.y + 1 - Math.sin(dir) * drag * 0.5;
+    const kx = (hipX + fx) / 2 + side * 2.5 * sc, ky = (hipY + fy) / 2 + 3 * sc;
+    ctx.beginPath(); ctx.moveTo(hipX + side * 2.5 * sc, hipY); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+    ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.ellipse(fx - Math.cos(dir) * 3 * sc, fy + 1, 7 * sc, 2.2 * sc, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 0.95;
+  }
+  const shY = s.y - 44 * sc - hover, shX = hipX + sway * 0.5;
+  poly([[hipX - 5.5 * sc, hipY + 2], [hipX + 5.5 * sc, hipY + 2], [shX + 3.5 * sc, shY], [shX - 3.5 * sc, shY]], col);
+  const hx = shX + sway * 0.6, hy = shY - 5.5 * sc;
+  ctx.beginPath(); ctx.ellipse(hx, hy, 4 * sc, 5.5 * sc, m.tilt || 0, 0, TAU); ctx.fill();
+  let ax = 0, ay = 1;
+  if (m.tgt) { const ts = toScreen(m.tgt.l, m.tgt.p, 10); const dx = ts.x - shX, dy = ts.y - shY, dd = Math.hypot(dx, dy) || 1; ax = dx / dd; ay = dy / dd; }
+  ctx.lineWidth = 1.4 * sc;
+  for (const side of [-1, 1]) {
+    const sx0 = shX + side * 3.5 * sc, sy0 = shY + 2 * sc;
+    const hangX = sx0 + side * 5 * sc + side * 2 * sc, hangY = sy0 + 38 * sc;
+    const len = (30 + 26 * reach) * sc, spread = side * 0.28 * (1 - reach * 0.6);
+    const ca = Math.cos(spread), sa = Math.sin(spread), rx = ax * ca - ay * sa, ry = ax * sa + ay * ca;
+    const ex = lerp(hangX, sx0 + rx * len, reach), ey = lerp(hangY, sy0 + ry * len, reach);
+    const elx = (sx0 + ex) / 2 + side * 7 * sc * (1 - reach * 0.5), ely = (sy0 + ey) / 2 + 6 * sc * (1 - reach);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(elx, ely); ctx.lineTo(ex, ey); ctx.stroke();
+    const fa = Math.atan2(ey - ely, ex - elx); ctx.lineWidth = 0.9 * sc;
+    for (let i = -1; i <= 1; i++) { const a = fa + i * 0.45; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + Math.cos(a) * 6 * sc, ey + Math.sin(a) * 6 * sc); ctx.stroke(); }
+    ctx.lineWidth = 1.4 * sc;
+  }
+  ctx.restore();
+  eyes.push({ x: hx, y: hy, boss: m.boss });
+}
+function drawLantern(l, p) {
+  const s = toScreen(l, p, 44);
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(T, T); ctx.rotate(-0.08);
+  ctx.strokeStyle = '#2a241c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, -6); ctx.stroke();
+  ctx.fillStyle = '#2a241c'; ctx.fillRect(-7, -6, 14, 3); ctx.fillRect(-7, 11, 14, 3); ctx.fillRect(-7, -3, 2, 14); ctx.fillRect(5, -3, 2, 14);
+  ctx.fillStyle = 'rgba(255,170,60,0.9)'; ctx.fillRect(-5, -3, 10, 14);
+  ctx.fillStyle = 'rgba(255,235,170,0.95)'; ctx.fillRect(-2, 1, 4, 7);
+  ctx.restore();
+}
+
+// ---- scene ----
+const L = { l: 20, p: 430, r: 150 };
+cam.l = L.l - 110; cam.p = L.p + 10;
+const trees = [];
+let k = 0;
+for (let cp = -600; cp < 1500; cp += 42) for (let cl = -700; cl < 700; cl += 42) {
+  k++;
+  const jl = cl + (hash(k * 3) - 0.5) * 36, jp = cp + (hash(k * 3 + 1) - 0.5) * 36;
+  const d = Math.abs(jl - lat(jp)); if (d < PATH_HW + 14) continue;
+  const prob = d < PATH_HW + 80 ? 0.32 : 0.72;
+  if (hash(k * 3 + 2) < prob) trees.push({ l: jl, p: jp, s: 0.75 + hash(k * 7) * 0.6 });
+}
+const CLOAKS = ['#6b5a7a', '#5a6b4a', '#7a5a4a', '#4a5a6b', '#6b6b4a', '#7a4a5a', '#5a5a5a', '#4a6b6b'];
+const SKINS = ['#d9b08c', '#c9956a', '#a8765a', '#e8c4a0', '#8a5a3c'];
+const villagers = [];
+for (let i = 0; i < 11; i++) {
+  const a = rand(0, TAU), r = rand(10, 42);
+  villagers.push({ l: L.l + Math.cos(a) * r, p: L.p + Math.sin(a) * r + 6, cloak: CLOAKS[i % CLOAKS.length], skin: SKINS[(i * 3) % SKINS.length], hat: i % 3 === 0, bob: rand(0, 2), torch: i === 4 });
+}
+// one straggler, about to be reached for
+villagers.push({ l: L.l + 112, p: L.p + 52, cloak: '#7a4a5a', skin: '#e8c4a0', hat: false, bob: 1 });
+const straggler = villagers[villagers.length - 1];
+const monsters = [
+  { l: L.l + 168, p: L.p + 66, dir: Math.PI, reach: 0.95, tgt: straggler, sway: 2 },
+  { l: L.l - 190, p: L.p + 40, dir: 0, reach: 0.6, tgt: { l: L.l, p: L.p }, sway: -2 },
+  { l: L.l - 120, p: L.p - 170, dir: 1.0, reach: 0.35, tgt: { l: L.l, p: L.p }, sway: 1 },
+  { l: L.l + 30, p: L.p + 215, dir: -1.4, reach: 0.45, tgt: { l: L.l, p: L.p }, sway: 0 },
+  { l: L.l - 260, p: L.p + 190, dir: 0.4, reach: 0.1, tgt: { l: L.l, p: L.p }, sway: 1.5 },
+  { l: L.l + 95, p: L.p - 100, dir: 2.4, reach: 0.55, tgt: { l: L.l, p: L.p }, boss: true, sway: 0 },
+];
+
+function render() {
+  ctx.fillStyle = '#06070e'; ctx.fillRect(0, 0, W, H);
+  drawGround();
+  const items = [];
+  const vis = (l, p) => { const s = toScreen(l, p); return s.x > -200 && s.x < W + 200 && s.y > -300 && s.y < H + 100; };
+  for (const t of trees) if (vis(t.l, t.p)) items.push({ p: t.p, f: () => drawTree(t) });
+  for (const v of villagers) items.push({ p: v.p, f: () => drawVillager(v) });
+  for (const m of monsters) items.push({ p: m.p, f: () => drawMonster(m) });
+  items.push({ p: L.p + 1, f: () => drawLantern(L.l, L.p) });
+  items.sort((a, b) => a.p - b.p);
+  for (const it of items) it.f();
+
+  // darkness
+  const dark = document.createElement('canvas'); dark.width = W; dark.height = H; const d = dark.getContext('2d');
+  d.fillStyle = 'rgba(4,5,12,0.84)'; d.fillRect(0, 0, W, H);
+  d.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, ry, st) => { d.save(); d.translate(x, y); d.scale(1, ry); const g = d.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, `rgba(0,0,0,${st})`); g.addColorStop(0.45, `rgba(0,0,0,${st * 0.88})`); g.addColorStop(0.8, `rgba(0,0,0,${st * 0.35})`); g.addColorStop(1, 'rgba(0,0,0,0)'); d.fillStyle = g; d.beginPath(); d.arc(0, 0, r, 0, TAU); d.fill(); d.restore(); };
+  const ls = toScreen(L.l, L.p);
+  hole(ls.x, ls.y, L.r * 1.18 * T, 0.64, 1);
+  const tv = villagers[4]; const tvs = toScreen(tv.l, tv.p); hole(tvs.x, tvs.y, 45 * T, 0.64, 0.6);
+  ctx.drawImage(dark, 0, 0);
+  // warm tint
+  ctx.save(); ctx.translate(ls.x, ls.y); ctx.scale(1, 0.64);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, L.r * 1.1 * T);
+  g.addColorStop(0, 'rgba(255,160,60,0.22)'); g.addColorStop(0.5, 'rgba(255,140,50,0.1)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, L.r * 1.1 * T, 0, TAU); ctx.fill(); ctx.restore();
+  // core ring
+  ctx.save(); ctx.translate(ls.x, ls.y); ctx.scale(1, 0.5); ctx.strokeStyle = 'rgba(255,200,120,0.16)'; ctx.lineWidth = 3; ctx.setLineDash([6, 18]); ctx.beginPath(); ctx.arc(0, 0, L.r * 0.62 * T, 0, TAU); ctx.stroke(); ctx.restore();
+  // eyes
+  for (const e of eyes) {
+    const col = e.boss ? '#ff3a3a' : '#dff2ff', r = (e.boss ? 3.2 : 1.4) * T, sp = (e.boss ? 6 : 2.4) * T;
+    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 18; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(e.x - sp, e.y, r, 0, TAU); ctx.arc(e.x + sp, e.y, r, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  // fog
+  for (let i = 0; i < 12; i++) {
+    const fx = hash(i * 17) * W, fy = hash(i * 23) * H, fr = 200 + hash(i * 31) * 260;
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(1, 0.4);
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, fr); fg.addColorStop(0, 'rgba(140,160,200,0.05)'); fg.addColorStop(1, 'rgba(140,160,200,0)');
+    ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(0, 0, fr, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  // vignette (dread)
+  const vg = ctx.createRadialGradient(ls.x, ls.y, 320, ls.x, ls.y, 1300);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(6,0,0,0.78)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  // title
+  ctx.textBaseline = 'middle';
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 30;
+  ctx.font = '900 190px Georgia, "Times New Roman", serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#e8dcc0';
+  ctx.fillText('LANTERN', 110, 250);
+  ctx.font = '400 46px Georgia, "Times New Roman", serif'; ctx.fillStyle = '#cfc6b0';
+  ctx.fillText('Your cursor is the only light.', 118, 360);
+  ctx.restore();
+  ctx.font = 'italic 400 34px Georgia, serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(216,207,182,0.85)';
+  ctx.fillText('“It only takes what you leave.”', W - 110, H - 90);
+}
+document.fonts && document.fonts.ready ? document.fonts.ready.then(render) : render();
+render();
+window.__done = true;
+})();
+</script>
+</body>
+</html>
