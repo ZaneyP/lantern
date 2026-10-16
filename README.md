@@ -1,6 +1,6 @@
 # Lantern
 
-An HTML5 canvas game, deployed on Cloudflare Pages and embedded (iframe) into another website.
+An HTML5 canvas game, deployed on Cloudflare Workers (static assets) and embedded (iframe) on the Scout House Builder Portal (Framer).
 
 Survival horror, isometric low-poly. Your cursor is the only light. A crowd of frightened villagers
 follows it, and the dark follows them. The village burned; the road to the city runs through the wood,
@@ -8,7 +8,7 @@ nine safe houses long. The last lantern-bearer did not come back. The game narra
 name, and it has walked this road before.
 
 - `public/index.html` — the entire game (no build step, no dependencies, no asset files)
-- `wrangler.jsonc` — Cloudflare Pages config (`assets.directory: ./public`)
+- `wrangler.jsonc` — Cloudflare Workers config (`assets.directory: ./public`); `public/thumbnail.png` is the 16:9 card image for the portal CMS
 
 ## How to play
 
@@ -32,7 +32,7 @@ name, and it has walked this road before.
 
 ## Deploy
 
-    npx wrangler pages deploy
+    npx wrangler deploy
 
 ## Embed
 

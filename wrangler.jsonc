@@ -1,5 +1,5 @@
-// Cloudflare Pages config for Lantern (HTML5 game, embedded via iframe on another site).
-// Deploy with: npx wrangler pages deploy
+// Cloudflare Workers (static assets) config for Lantern (HTML5 game, embedded via iframe on the Scout House Builder Portal).
+// Deploy with: npx wrangler deploy   (or connect the repo in Cloudflare > Workers & Pages; deploy command: npx wrangler deploy)
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "lantern",
